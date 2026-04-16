@@ -117,15 +117,27 @@ Open 5ire and go to `Tools` -> `New` and set the following configurations:
 
 ## ⚙️ Standardized Core Operations 
 
-The Unified MCP Server currently exposes several highly validated cross-backend tools directly to the agent. Below is a subset of operations currently supported:
+The Unified MCP Server currently exposes an extensive, heavily validated cross-backend tool suite directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it heavily on either backend.
 
-| Tool Invocation | Description | Backend Support |
-|---|---|---|
-| `list_functions()` | Retrieve a paginated array of valid functions natively decoded from the binary to search. | IDA & Ghidra |
-| `get_function_decompilation(addr)` | Safely generates and fetches C-pseudocode abstract syntax tree interpretations from Hex-Rays/Ghidra. | IDA & Ghidra |
-| `get_function_xrefs(addr)` | Provides structured arrays of `xrefs_to` and `xrefs_from` dictating deep execution block flows. | IDA & Ghidra |
-| `rename_symbol(addr, int, type)` | Pushes intelligent algorithmic renaming directly into the live IDE database safely. | IDA & Ghidra |
-| `find_strings()` | Extracts mapped ASCII/UTF-8 datasegments dynamically for string analysis. | IDA & Ghidra |
+### Disassembly & Decompilation
+- `get_function_decompilation(address)`: Safely pulls raw C pseudocode from either Hex-Rays or Ghidra decompilers. Generates robust code bound responses to prevent token overflow.
+- `disassemble_at(address)`: Disassembles the operational instructions block-by-block with full operand extraction detail.
+- `list_functions()`: Retrieves a paginated array of all valid functions natively identified in the executable, allowing agents to browse the structural map.
+
+### Control Flow & Cross-Reference Engine
+- `get_function_xrefs(address)`: Automatically pulls cross-reference mappings (`xrefs_to`, `xrefs_from`) for deep execution flow analysis.
+- `analyze_callers(address)`: Gets immediate caller references recursively.
+- `basic_blocks(addrs)`: Analyzes the successors and predecessors in the standard CFG (Control Flow Graph).
+
+### Modification & Refactoring Operations
+- `rename_symbol(address, new_name)`: Pushes intelligent algorithmic renaming directly into the live IDE database safely, managed asynchronously on the primary UI thread to prevent corruption.
+- `set_comments(items)`: Places contextual comments dynamically in the disassembly or decompiler views for your AI to document its own progress.
+- `set_function_type(address, signature)`: Applies complex C function prototypes to accurately sync argument states.
+
+### Data & String Analysis
+- `find_strings()`: Extracts mapped ASCII/UTF-8 datasegments dynamically for string analysis and encryption detection.
+- `read_memory(address, size)`: Reads raw operational bytes directly from the binary map for automated signature scanning.
+- `get_globals()`: Iterates through the data sections dynamically to extract global constants.
 
 ---
 
