@@ -9,7 +9,7 @@ from schemas.models import (
 
 class IDAAdapter(BaseAdapter):
     """
-    Adapter mapping unified MCP tool calls to the IDA Pro background
+    Adapter mapping NexusRE MCP tool calls to the IDA Pro background
     HTTP server (ida_backend_plugin.py) running on the local machine.
     All calls are dispatched as JSON POST requests with an 'action' key.
     """

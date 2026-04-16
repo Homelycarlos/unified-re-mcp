@@ -9,7 +9,7 @@ from schemas.models import (
 
 class GhidraAdapter(BaseAdapter):
     """
-    Adapter mapping unified MCP tool calls to the GhidraMCP background
+    Adapter mapping NexusRE MCP tool calls to the GhidraMCP background
     HTTP server running inside the Ghidra CodeBrowser.
     All calls are dispatched as JSON POST requests with an 'action' key.
     """

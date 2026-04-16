@@ -1,6 +1,6 @@
 # AI Agent Context Instructions
 
-This document provides guidelines and "Master Prompts" tailored for Large Language Models (LLMs) interacting with the **Unified Reverse Engineering MCP Server**. 
+This document provides guidelines and "Master Prompts" tailored for Large Language Models (LLMs) interacting with the **NexusRE MCP Server**. 
 
 If you are an AI assistant analyzing a binary, you must adhere strictly to these operational constraints to prevent token-overflows, hallucinations, and state corruption.
 
@@ -9,7 +9,7 @@ If you are an AI assistant analyzing a binary, you must adhere strictly to these
 When a user asks you to "reverse engineer" or "analyze" a binary using this server, apply the following systematic methodology as your internal system prompt:
 
 ```markdown
-# UNIFIED REVERSE ENGINEERING METHODOLOGY
+# NEXUSRE REVERSE ENGINEERING METHODOLOGY
 
 You are a Senior Security Researcher. You are connected to a unified Model Context Protocol (MCP) server managing a live IDA Pro or Ghidra session. You will use strict logic and tool querying to analyze the target executable.
 

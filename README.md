@@ -1,12 +1,12 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/releases)
-[![GitHub stars](https://img.shields.io/github/stars/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/network/members)
-[![GitHub contributors](https://img.shields.io/github/contributors/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/graphs/contributors)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Homelycarlos/NexusRE-MCP)](https://github.com/Homelycarlos/NexusRE-MCP/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Homelycarlos/NexusRE-MCP)](https://github.com/Homelycarlos/NexusRE-MCP/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Homelycarlos/NexusRE-MCP)](https://github.com/Homelycarlos/NexusRE-MCP/network/members)
+[![GitHub contributors](https://img.shields.io/github/contributors/Homelycarlos/NexusRE-MCP)](https://github.com/Homelycarlos/NexusRE-MCP/graphs/contributors)
 
-# ⚡ Unified Reverse Engineering MCP Server
+# ⚡ NexusRE MCP
 
-The **Unified Reverse Engineering MCP Server** is an enterprise-grade, stateless [Model Context Protocol](https://modelcontextprotocol.io/) framework that securely bridges **IDA Pro** and **Ghidra** into a single, cohesive AI-driven reverse engineering environment.
+The **NexusRE MCP Server** is an enterprise-grade, stateless [Model Context Protocol](https://modelcontextprotocol.io/) framework that securely bridges **IDA Pro** and **Ghidra** into a single, cohesive AI-driven reverse engineering environment.
 
 Designed from the ground up to prevent global state leaks and enforce strict typing, this server enables AI coding agents to autonomously navigate binaries, decompile functions, intelligently rename symbols, and fetch complex cross-references over `stdio` without requiring any manual UI interaction.
 
@@ -60,11 +60,11 @@ This project was built to address the boilerplate, unvalidated inputs, and state
 
 ## 🚀 Installation & Integration
 
-Install the latest version of the Unified MCP Server by cloning this repository:
+Install the latest version of NexusRE MCP by cloning this repository:
 
 ```sh
-git clone https://github.com/Homelycarlos/unified-re-mcp.git
-cd unified-re-mcp
+git clone https://github.com/Homelycarlos/NexusRE-MCP.git
+cd NexusRE-MCP
 ```
 
 ### 1. IDA Pro Integration
@@ -74,7 +74,7 @@ For the server to securely interact with your IDA instance natively:
 3. The plugin will execute via `PLUGIN_FIX` and spin up an isolated background HTTP listener automatically bound to IDA's execution thread (`ida_kernwin.execute_sync`) to prevent database corruption.
 
 ### 2. Ghidra Integration
-The unified MCP server supports dispatching structural queries directly to existing Ghidra HTTP server plugin installations. You must have a compatible background listener running in Ghidra for the `ghidra` adapter to forward parameters successfully.
+NexusRE MCP supports dispatching structural queries directly to existing Ghidra HTTP server plugin installations. You must have a compatible background listener running in Ghidra for the `ghidra` adapter to forward parameters successfully.
 
 ### 3. Automatic Client Installation (Recommended)
 Instead of manually editing JSON config files, you can run the auto-installer which will detect Claude Desktop and Cursor on your system and inject the server config automatically:
@@ -86,14 +86,14 @@ uv run main.py --install
 This will:
 - Scan for Claude Desktop config files (including Windows Store UWP paths)
 - Scan for Cursor global MCP storage
-- Inject or update the `unified-reverse-engineering` server block
+- Inject or update the `nexusre-mcp` server block
 - Preserve any existing MCP server configurations you already have
 
 ---
 
 ## 💻 MCP Client Configuration
 
-Because `unified-re-mcp` is universally compatible with standard `stdio`, you can configure any modern client frictionlessly.
+Because `NexusRE-MCP` is universally compatible with standard `stdio`, you can configure any modern client frictionlessly.
 
 ### Automatic Setup
 ```sh
@@ -106,14 +106,14 @@ Run `uv run main.py --config` to generate your exact path config, or add the fol
 ```json
 {
   "mcpServers": {
-    "unified-re-mcp": {
+    "NexusRE-MCP": {
       "command": "uv",
       "args": [
         "run",
         "--with", "mcp[cli]",
         "--with", "pydantic",
         "--with", "aiohttp",
-        "C:\\ABSOLUTE_PATH\\TO\\unified-re-mcp\\main.py"
+        "C:\\ABSOLUTE_PATH\\TO\\NexusRE-MCP\\main.py"
       ]
     }
   }
@@ -134,7 +134,7 @@ This launches a local HTTP server that accepts SSE connections, allowing any HTT
 
 ## 🔌 Full Integration Guide
 
-The Unified MCP Server is designed to work with every major AI coding environment, agent framework, and reverse engineering tool. Below is a complete guide on how to connect each one.
+NexusRE MCP is designed to work with every major AI coding environment, agent framework, and reverse engineering tool. Below is a complete guide on how to connect each one.
 
 ### 🧠 AI IDEs & Coding Agents
 
@@ -143,7 +143,7 @@ Cursor has native MCP support. Go to `Settings` → `MCP` → `Add Server`:
 
 ```json
 {
-  "unified-re-mcp": {
+  "NexusRE-MCP": {
     "command": "uv",
     "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
   }
@@ -159,7 +159,7 @@ Install the [Continue](https://continue.dev/) extension, then edit your `~/.cont
 {
   "mcpServers": [
     {
-      "name": "unified-re-mcp",
+      "name": "NexusRE-MCP",
       "command": "uv",
       "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
     }
@@ -175,7 +175,7 @@ Windsurf supports MCP tool servers via its agent cascade system. Add to your Win
 ```json
 {
   "mcpServers": {
-    "unified-re-mcp": {
+    "NexusRE-MCP": {
       "command": "uv",
       "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
     }
@@ -223,7 +223,7 @@ Connect as a tool connector in LlamaIndex's `FunctionTool` system:
 from llama_index.core.tools import FunctionTool
 
 def decompile(address: str) -> str:
-    """Decompile function at address via unified MCP server."""
+    """Decompile function at address via NexusRE MCP server."""
     import requests
     r = requests.post("http://localhost:8080/rpc", json={"action": "decompile", "args": {"address": address}})
     return r.json().get("code", "")
@@ -326,7 +326,7 @@ Open Interpreter can call external tools and scripts natively. Start the server 
 
 ## ⚙️ Standardized Core Operations 
 
-The Unified MCP Server exposes **16 heavily validated cross-backend tools** directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it on either backend.
+NexusRE MCP exposes **16 heavily validated cross-backend tools** directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it on either backend.
 
 ### Decompilation & Disassembly
 - `decompile_function(address)`: Safely pulls raw C pseudocode from either Hex-Rays or Ghidra decompilers.
@@ -383,7 +383,7 @@ Furthermore, apply libraries like FLIRT or Lumina signatures. Replacing `sub_401
 
 ## 🛠️ Extensibility & Development
 
-Integrating additional tools into `unified-re-mcp` is intentionally frictionless. There is absolutely zero traditional socket or routing boilerplate.
+Integrating additional tools into `NexusRE-MCP` is intentionally frictionless. There is absolutely zero traditional socket or routing boilerplate.
 
 ### Example: Adding a New Tool
 

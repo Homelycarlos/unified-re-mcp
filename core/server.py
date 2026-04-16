@@ -12,9 +12,9 @@ from schemas.models import (
 )
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("UnifiedMCP")
+logger = logging.getLogger("NexusRE")
 
-mcp = FastMCP("Unified Reverse Engineering MCP Server")
+mcp = FastMCP("NexusRE MCP Server")
 session_manager = SessionManager()
 
 def get_adapter(session_id: str):
@@ -39,7 +39,7 @@ def handle_error(e: Exception) -> dict:
 @mcp.tool()
 def init_session(session_id: str, backend: str, binary_path: str, architecture: str, backend_url: str = "http://127.0.0.1:10101") -> str:
     """
-    Initialize a new unified reverse engineering session.
+    Initialize a new NexusRE session.
     backend must be 'ida' or 'ghidra'.
     """
     try:

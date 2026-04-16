@@ -36,7 +36,7 @@ jobs:
       - name: Package release archive
         run: |
           mkdir -p dist
-          zip -r dist/unified-re-mcp-${{ github.ref_name }}.zip \
+          zip -r dist/NexusRE-MCP-${{ github.ref_name }}.zip \
             main.py \
             AGENTS.md \
             README.md \
@@ -50,7 +50,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/unified-re-mcp-${{ github.ref_name }}.zip
+          files: dist/NexusRE-MCP-${{ github.ref_name }}.zip
           generate_release_notes: true
           draft: false
           prerelease: false

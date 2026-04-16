@@ -14,7 +14,7 @@ def get_config_json() -> dict:
     script_path = os.path.abspath(__file__)
     return {
         "mcpServers": {
-            "unified-reverse-engineering": {
+            "nexusre-mcp": {
                 "command": "uv",
                 "args": [
                     "run",
@@ -32,7 +32,7 @@ def print_config():
     """Print the JSON configuration for manual copy-paste."""
     config = get_config_json()
     print("=========================================")
-    print(" UNIFIED MCP SERVER CONFIGURATION")
+    print(" NEXUSRE MCP SERVER CONFIGURATION")
     print("=========================================\n")
     print("Copy the JSON block below and paste it into your MCP client's configuration file:")
     print(" - Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json or ~/Library/Application Support/Claude/claude_desktop_config.json")
@@ -97,7 +97,7 @@ def auto_install():
     server configuration into their config files without any manual copy-paste.
     """
     config_fragment = get_config_json()
-    server_key = "unified-reverse-engineering"
+    server_key = "nexusre-mcp"
     server_block = config_fragment["mcpServers"][server_key]
 
     targets = []
@@ -132,7 +132,7 @@ def auto_install():
             print(f"    Already configured. Updating to latest path...")
         else:
             print(f"[+] {client_name} ({config_path})")
-            print(f"    Installing unified-re-mcp server config...")
+            print(f"    Installing NexusRE-MCP server config...")
 
         # Inject / update the server block
         existing["mcpServers"][server_key] = server_block
@@ -157,7 +157,7 @@ def auto_install():
 
 def print_help():
     print("""
-Unified Reverse Engineering MCP Server
+NexusRE MCP Server
 =======================================
 
 Usage:
@@ -196,7 +196,7 @@ if __name__ == "__main__":
             port = int(sys.argv[idx + 1])
 
     if transport == "sse":
-        print(f"[*] Starting Unified MCP Server with SSE transport on port {port}...")
+        print(f"[*] Starting NEXUSRE MCP SERVER with SSE transport on port {port}...")
         mcp.run(transport="sse", port=port)
     else:
         # Start the fastMCP server via standard CLI execution (stdio)
