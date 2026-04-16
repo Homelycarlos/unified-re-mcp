@@ -132,6 +132,198 @@ This launches a local HTTP server that accepts SSE connections, allowing any HTT
 
 ---
 
+## 🔌 Full Integration Guide
+
+The Unified MCP Server is designed to work with every major AI coding environment, agent framework, and reverse engineering tool. Below is a complete guide on how to connect each one.
+
+### 🧠 AI IDEs & Coding Agents
+
+#### 1. Cursor IDE
+Cursor has native MCP support. Go to `Settings` → `MCP` → `Add Server`:
+
+```json
+{
+  "unified-re-mcp": {
+    "command": "uv",
+    "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
+  }
+}
+```
+
+Or run `uv run main.py --install` to auto-inject.
+
+#### 2. VS Code (with Continue.dev)
+Install the [Continue](https://continue.dev/) extension, then edit your `~/.continue/config.json`:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "unified-re-mcp",
+      "command": "uv",
+      "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
+    }
+  ]
+}
+```
+
+This gives VS Code full MCP tool access for IDA/Ghidra queries directly in your editor.
+
+#### 3. Windsurf (Codeium)
+Windsurf supports MCP tool servers via its agent cascade system. Add to your Windsurf MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "unified-re-mcp": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp[cli]", "--with", "pydantic", "--with", "aiohttp", "C:\\PATH\\TO\\main.py"]
+    }
+  }
+}
+```
+
+#### 4. Continue.dev (VS Code / JetBrains)
+Continue is fully MCP-compatible. Define the server as an external tool in your Continue config. It will appear as a callable tool alongside your LLM chat, perfect for querying decompiled functions mid-conversation.
+
+---
+
+### 🤖 Agent Frameworks
+
+For maximum flexibility — chaining IDA + Ghidra + custom tools in automated pipelines — start the server in SSE mode first:
+
+```sh
+uv run main.py --transport sse --port 8080
+```
+
+#### 5. LangChain
+Wrap the MCP server as a LangChain `Tool`:
+
+```python
+from langchain.tools import Tool
+import requests
+
+def call_mcp(action, args):
+    return requests.post("http://localhost:8080/rpc", json={"action": action, "args": args}).json()
+
+decompile_tool = Tool(
+    name="decompile_function",
+    description="Decompile a function at the given hex address using IDA/Ghidra",
+    func=lambda addr: call_mcp("decompile", {"address": addr})
+)
+```
+
+#### 6. LangGraph
+LangGraph excels at multi-step reasoning. Define each MCP tool as a node in your graph, enabling the agent to autonomously chain `list_functions → decompile → get_xrefs → rename_symbol` flows.
+
+#### 7. LlamaIndex
+Connect as a tool connector in LlamaIndex's `FunctionTool` system:
+
+```python
+from llama_index.core.tools import FunctionTool
+
+def decompile(address: str) -> str:
+    """Decompile function at address via unified MCP server."""
+    import requests
+    r = requests.post("http://localhost:8080/rpc", json={"action": "decompile", "args": {"address": address}})
+    return r.json().get("code", "")
+
+tool = FunctionTool.from_defaults(fn=decompile)
+```
+
+#### 8. AutoGen (Microsoft)
+Expose MCP tools to AutoGen multi-agent conversations:
+
+```python
+@user_proxy.register_for_execution()
+@assistant.register_for_llm(description="Decompile a binary function")
+def decompile_function(address: str) -> str:
+    import requests
+    return requests.post("http://localhost:8080/rpc",
+        json={"action": "decompile", "args": {"address": address}}).text
+```
+
+#### 9. CrewAI
+Create a CrewAI tool wrapper:
+
+```python
+from crewai_tools import BaseTool
+
+class DecompileTool(BaseTool):
+    name: str = "Decompile Function"
+    description: str = "Decompiles a function at the given address using IDA/Ghidra MCP server"
+
+    def _run(self, address: str) -> str:
+        import requests
+        r = requests.post("http://localhost:8080/rpc",
+            json={"action": "decompile", "args": {"address": address}})
+        return r.json().get("code", "")
+```
+
+---
+
+### 🧩 Reverse Engineering & Security Tooling
+
+#### 10. IDA Pro
+The primary backend. Copy `plugins/ida/ida_backend_plugin.py` to your IDA `plugins/` folder. It will auto-start a background HTTP listener on port `10101` via `PLUGIN_FIX`. The MCP server dispatches all tool calls to this listener.
+
+#### 11. Ghidra
+The secondary backend. Install a compatible Ghidra HTTP bridge plugin (such as [GhidraMCP](https://github.com/LaurieWired/GhidraMCP)), then point the unified server's session to it using `backend="ghidra"`.
+
+#### 12. Binary Ninja
+No official MCP adapter exists, but you can build a custom bridge using Binary Ninja's Python API. Expose the same HTTP action interface that `ida_backend_plugin.py` uses, and point a session at it with a custom `backend_url`.
+
+---
+
+### 🧪 AI Chat & Model Platforms
+
+#### 13. OpenAI API (Function Calling)
+Use OpenAI's tool/function calling with SSE transport:
+
+```python
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "decompile_function",
+        "description": "Decompile a binary function at the given hex address",
+        "parameters": {
+            "type": "object",
+            "properties": {"address": {"type": "string"}},
+            "required": ["address"]
+        }
+    }
+}]
+# When the model calls the tool, forward to: POST http://localhost:8080/rpc
+```
+
+#### 14. Anthropic Claude (API / Tool Use)
+Claude's tool-use API maps perfectly to MCP:
+
+```python
+tools = [{
+    "name": "decompile_function",
+    "description": "Decompile a function at the given address via IDA/Ghidra.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"address": {"type": "string", "description": "Hex address"}},
+        "required": ["address"]
+    }
+}]
+# Route tool results back through the SSE endpoint
+```
+
+---
+
+### ⚙️ Experimental / Self-Hosted AI UIs
+
+#### 15. OpenDevin / Devin-style Agents
+Open-source Devin variants are designed for tool execution and environment access. Configure the MCP server as an external tool endpoint. The agent can autonomously call `decompile_function`, `get_xrefs`, and `rename_symbol` as part of its reasoning loop.
+
+#### 16. Open Interpreter
+Open Interpreter can call external tools and scripts natively. Start the server in SSE mode and point Open Interpreter's tool config at `http://localhost:8080`.
+
+---
+
 ## ⚙️ Standardized Core Operations 
 
 The Unified MCP Server exposes **16 heavily validated cross-backend tools** directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it on either backend.
