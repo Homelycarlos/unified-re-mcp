@@ -28,8 +28,38 @@ Integrates with standard Ghidra HTTP server adapter wrappers, providing the iden
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
-* Python 3.10+
+* Python (3.11 or higher) — *Use `idapyswitch` to bind IDA to your newest Python version if necessary.*
 * [uv](https://docs.astral.sh/uv/) (highly recommended for automatic, sandboxed dependency execution)
+* IDA Pro (8.3 or higher, 9.x recommended). *Note: IDA Free is not supported as it lacks IDAPython.*
+
+### Supported MCP Clients
+Because this framework implements the strict MCP JSON-RPC standard over standard I/O, it inherently works with all major AI coding assistants. Pick the one you like:
+
+* Amazon Q Developer CLI
+* Augment Code
+* Claude
+* Claude Code
+* Cline
+* Codex
+* Copilot CLI
+* Crush
+* Cursor
+* Gemini CLI
+* Kilo Code
+* Kiro
+* LM Studio
+* Opencode
+* Qodo Gen
+* Qwen Coder
+* Roo Code
+* Trae
+* VS Code
+* VS Code Insiders
+* Warp
+* Windsurf
+* Zed
+
+**Other MCP Clients:** Just run `uv run main.py --config` to generate the correct JSON configuration for your specific client!
 
 ### 1. Configure Your MCP Client
 To automatically generate the exact JSON configuration needed for your specific AI client, simply run:
@@ -42,7 +72,7 @@ Copy the resulting block and paste it into your client's settings.
 
 **Quick locations for popular clients:**
 * **Claude Desktop:** `%APPDATA%\Claude\claude_desktop_config.json`
-* **Cursor / Windsurf / Roo Code:** Add via the IDE's MCP server panel or local `mcp.json`.
+* **Cursor / Windsurf / Roo Code:** Add via the IDE's MCP server panel or local workspace `mcp.json`.
 
 ### 2. Install the IDA Plugin
 For the IDA Pro integration to function:
