@@ -23,7 +23,7 @@ This project was built to address the boilerplate, unvalidated inputs, and state
 3. **Multi-Backend API Simplicity**:
    A single, unified Python `BaseAdapter` abstraction governs both Ghidra and IDA. You can write one AI prompt, securely use one client workflow, and hot-swap between an IDA Pro database and a Ghidra dataset frictionlessly depending on the target.
 4. **FastMCP Integration**: 
-   Leverages standard standard I/O for instantaneous asynchronous message parsing. No hacky socket overhead delays.
+   Leverages standard I/O and SSE for instantaneous asynchronous message parsing. No hacky socket overhead delays.
 
 ---
 
@@ -76,13 +76,31 @@ For the server to securely interact with your IDA instance natively:
 ### 2. Ghidra Integration
 The unified MCP server supports dispatching structural queries directly to existing Ghidra HTTP server plugin installations. You must have a compatible background listener running in Ghidra for the `ghidra` adapter to forward parameters successfully.
 
+### 3. Automatic Client Installation (Recommended)
+Instead of manually editing JSON config files, you can run the auto-installer which will detect Claude Desktop and Cursor on your system and inject the server config automatically:
+
+```sh
+uv run main.py --install
+```
+
+This will:
+- Scan for Claude Desktop config files (including Windows Store UWP paths)
+- Scan for Cursor global MCP storage
+- Inject or update the `unified-reverse-engineering` server block
+- Preserve any existing MCP server configurations you already have
+
 ---
 
 ## 💻 MCP Client Configuration
 
 Because `unified-re-mcp` is universally compatible with standard `stdio`, you can configure any modern client frictionlessly.
 
-### Example 1: Claude Desktop
+### Automatic Setup
+```sh
+uv run main.py --install    # Auto-detect Claude/Cursor and inject config
+```
+
+### Manual Setup
 Run `uv run main.py --config` to generate your exact path config, or add the following to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
@@ -103,41 +121,42 @@ Run `uv run main.py --config` to generate your exact path config, or add the fol
 ```
 **Important**: Make sure you completely restart Claude from the system tray for the configuration to take effect.
 
-### Example 2: Cline
-In Cline, select `MCP Servers` at the top. Select `Command` as your integration type, and paste your `uv run` invocation exactly as written in the config output.
+### SSE / HTTP Transport
+For browser-based AI models or remote agents, you can start the server with SSE (Server-Sent Events) transport instead of stdio:
 
-### Example 3: 5ire
-Open 5ire and go to `Tools` -> `New` and set the following configurations:
+```sh
+uv run main.py --transport sse --port 8080
+```
 
-1. Tool Key: `unified-re-mcp`
-2. Name: UnifiedRE
-3. Command: `uv run C:\ABSOLUTE_PATH_TO\unified-re-mcp\main.py`
+This launches a local HTTP server that accepts SSE connections, allowing any HTTP-capable AI client to query your IDA/Ghidra databases remotely.
 
 ---
 
 ## ⚙️ Standardized Core Operations 
 
-The Unified MCP Server currently exposes an extensive, heavily validated cross-backend tool suite directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it heavily on either backend.
+The Unified MCP Server exposes **16 heavily validated cross-backend tools** directly to the AI agent. These functions are mapped identically across both IDA and Ghidra, meaning an agent can write a script once and leverage it on either backend.
 
-### Disassembly & Decompilation
-- `get_function_decompilation(address)`: Safely pulls raw C pseudocode from either Hex-Rays or Ghidra decompilers. Generates robust code bound responses to prevent token overflow.
-- `disassemble_at(address)`: Disassembles the operational instructions block-by-block with full operand extraction detail.
-- `list_functions()`: Retrieves a paginated array of all valid functions natively identified in the executable, allowing agents to browse the structural map.
+### Decompilation & Disassembly
+- `decompile_function(address)`: Safely pulls raw C pseudocode from either Hex-Rays or Ghidra decompilers.
+- `disassemble_at(address)`: Disassembles the function block-by-block with full operand extraction detail. Returns structured `InstructionSchema` objects.
+- `list_functions()`: Retrieves a paginated array of all valid functions natively identified in the executable.
+- `get_function(address)`: Get complete details for a specific function by address.
+- `batch_decompile(addresses)`: Decompile multiple functions in a single call for bulk analysis workflows.
 
 ### Control Flow & Cross-Reference Engine
-- `get_function_xrefs(address)`: Automatically pulls cross-reference mappings (`xrefs_to`, `xrefs_from`) for deep execution flow analysis.
-- `analyze_callers(address)`: Gets immediate caller references recursively.
-- `basic_blocks(addrs)`: Analyzes the successors and predecessors in the standard CFG (Control Flow Graph).
+- `get_xrefs(address)`: Automatically pulls cross-reference mappings (`xrefs_to`, `xrefs_from`) for deep execution flow analysis.
 
 ### Modification & Refactoring Operations
-- `rename_symbol(address, new_name)`: Pushes intelligent algorithmic renaming directly into the live IDE database safely, managed asynchronously on the primary UI thread to prevent corruption.
-- `set_comments(items)`: Places contextual comments dynamically in the disassembly or decompiler views for your AI to document its own progress.
-- `set_function_type(address, signature)`: Applies complex C function prototypes to accurately sync argument states.
+- `rename_symbol(address, new_name)`: Pushes intelligent algorithmic renaming directly into the live IDE database, managed asynchronously on the primary UI thread to prevent corruption.
+- `set_comment(address, comment, repeatable)`: Places contextual comments dynamically in the disassembly or decompiler views for your AI to document its own progress.
+- `set_function_type(address, signature)`: Applies complex C function prototypes to accurately sync argument states (e.g., `int __fastcall foo(int a1, char *a2)`).
 
 ### Data & String Analysis
-- `find_strings()`: Extracts mapped ASCII/UTF-8 datasegments dynamically for string analysis and encryption detection.
-- `read_memory(address, size)`: Reads raw operational bytes directly from the binary map for automated signature scanning.
-- `get_globals()`: Iterates through the data sections dynamically to extract global constants.
+- `get_strings()`: Extracts mapped ASCII/UTF-8 datasegments dynamically for string analysis and encryption detection.
+- `get_globals()`: Iterates through the data sections to extract named global constants and variables.
+- `get_segments()`: Returns all memory segments (`.text`, `.data`, `.rdata`, `.bss`) with start/end addresses, sizes, and permissions.
+- `get_imports()`: Lists every imported symbol with its module origin (e.g., `kernel32.dll::VirtualProtect`).
+- `get_exports()`: Lists every exported symbol from the binary.
 
 ---
 
@@ -148,12 +167,14 @@ LLMs are prone to hallucinations, so precise prompting is critical. Below is a m
 ```md
 Your task is to analyze a crackme binary. You can use the MCP tools to interact with my open IDA/Ghidra instance. Please strictly follow this systematic methodology:
 
-1. **Decompilation Analysis**: Inspect the decompilation using `get_function_decompilation`, and analyze it carefully block-by-block. 
+1. **Decompilation Analysis**: Inspect the decompilation using `decompile_function`, and analyze it carefully block-by-block. 
 2. **Readability**: Rename variables using `rename_symbol` to sensible names based on algorithmic patterns. Change function names to describe their actual operational purpose.
-3. **Deep Dives**: If more details are necessary, pull cross-references using `get_function_xrefs` to identify calling functions or examine the entry points.
+3. **Deep Dives**: If more details are necessary, pull cross-references using `get_xrefs` to identify calling functions or examine the entry points.
 4. **Constraints**: NEVER convert number bases yourself. NEVER assume compiler structures blindly. Derive all findings purely from tool data.
 5. **Documentation**: Create a comprehensive markdown report listing execution flows you discovered.
 ```
+
+For a complete, battle-tested master prompt, see [AGENTS.md](AGENTS.md).
 
 ## 🎯 Tips for Enhancing LLM Accuracy
 
@@ -170,7 +191,7 @@ Furthermore, apply libraries like FLIRT or Lumina signatures. Replacing `sub_401
 
 ## 🛠️ Extensibility & Development
 
-Integrating additional tools into `unified-re-mcp` is intentionally frictionless. There is absolute zero traditional socket or routing boilerplate.
+Integrating additional tools into `unified-re-mcp` is intentionally frictionless. There is absolutely zero traditional socket or routing boilerplate.
 
 ### Example: Adding a New Tool
 
@@ -178,12 +199,23 @@ Simply drop a new Python function explicitly decorated with `@mcp.tool()` inside
 
 ```python
 @mcp.tool()
-async def read_memory_bytes(ctx: Context, address: int, size: int) -> bytes:
+async def read_memory_bytes(session_id: str, address: str, size: int) -> Any:
     """ Reads raw operative bytes directly from the database memory map. """
-    session = await manager.get_session(ctx.session_id)
-    return await session.adapter.read_memory(address, size)
+    adapter = get_adapter(session_id)
+    return await adapter.read_memory(address, size)
 ```
-The underlying `fastmcp` validator will autonomously detect the `address: int` and auto-generate the strict JSON-RPC payload interface schemas.
+The underlying `fastmcp` validator will autonomously detect the `address: str` and auto-generate the strict JSON-RPC payload interface schemas.
+
+### CLI Reference
+
+```
+uv run main.py                 Start the MCP server (stdio transport)
+uv run main.py --config        Print the JSON config for manual setup
+uv run main.py --install       Auto-detect & inject config into Claude/Cursor
+uv run main.py --transport sse Start the server with SSE transport (HTTP)
+uv run main.py --port 8080     Set the SSE server port (default: 8080)
+uv run main.py --help          Show help message
+```
 
 ### Local Tool Testing
 To independently debug or test the server without spinning up a live LLM chat:

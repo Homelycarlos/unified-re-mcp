@@ -1,27 +1,33 @@
 from typing import List, Optional
 import aiohttp
 from .base import BaseAdapter
-from schemas.models import FunctionSchema, StringSchema, XrefSchema
+from schemas.models import (
+    FunctionSchema, StringSchema, XrefSchema,
+    InstructionSchema, CommentSchema, GlobalVarSchema,
+    SegmentSchema, ImportSchema, ExportSchema
+)
 
 class GhidraAdapter(BaseAdapter):
     """
-    Example Wrapper mapping normalized functions to GhidraMCP background endpoints.
+    Adapter mapping unified MCP tool calls to the GhidraMCP background
+    HTTP server running inside the Ghidra CodeBrowser.
+    All calls are dispatched as JSON POST requests with an 'action' key.
     """
     def __init__(self, backend_url: str):
         self.base_url = backend_url
 
-    async def _rpc_call(self, method: str, params: dict) -> dict:
+    async def _call(self, action: str, args: dict = None) -> dict:
+        """Issue a single JSON POST to the Ghidra background HTTP server."""
+        payload = {"action": action, "args": args or {}}
         async with aiohttp.ClientSession() as session:
-            payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": 1}
             async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
                 resp.raise_for_status()
-                data = await resp.json()
-                if "error" in data:
-                    raise Exception(data["error"])
-                return data.get("result", {})
+                return await resp.json()
+
+    # ── Decompilation & Function Listing ──────────────────────────────────
 
     async def list_functions(self) -> List[FunctionSchema]:
-        res = await self._rpc_call("ghidra_list_functions", {})
+        res = await self._call("ghidra_list_functions")
         return [
             FunctionSchema(
                 name=f.get('name', ''),
@@ -34,29 +40,43 @@ class GhidraAdapter(BaseAdapter):
         ]
 
     async def get_function(self, address: str) -> Optional[FunctionSchema]:
-        res = await self._rpc_call("ghidra_get_function", {"address": address})
-        if not res:
+        res = await self._call("ghidra_get_function", {"address": address})
+        if not res or "error" in res:
             return None
-        return FunctionSchema(**res)
+        return FunctionSchema(
+            name=res.get('name', ''),
+            address=res.get('address', address),
+            size=res.get('size', 0),
+            instructions=[],
+            decompiled=None,
+            xrefs=[]
+        )
 
     async def decompile_function(self, address: str) -> Optional[str]:
-        res = await self._rpc_call("ghidra_decompile_function", {"address": address})
+        res = await self._call("ghidra_decompile_function", {"address": address})
         return res.get("code")
 
-    async def get_xrefs(self, address: str) -> List[XrefSchema]:
-        res = await self._rpc_call("ghidra_get_xrefs", {"address": address})
-        xrefs = []
-        for x in res.get("xrefs", []):
-            xrefs.append(XrefSchema(from_addr=x.get("from"), to_addr=x.get("to"), type=x.get("type", "Code")))
-        return xrefs
-
-    async def get_strings(self) -> List[StringSchema]:
-        res = await self._rpc_call("ghidra_get_strings", {})
-        return [StringSchema(**s) for s in res.get("strings", [])]
-
-    async def rename_symbol(self, address: str, name: str) -> bool:
-        res = await self._rpc_call("ghidra_rename_symbol", {"address": address, "name": name})
-        return res.get("success", False)
+    async def disassemble_at(self, address: str) -> List[InstructionSchema]:
+        res = await self._call("ghidra_disassemble", {"address": address})
+        raw = res.get("code", "")
+        instructions = []
+        for line in raw.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if ": " in line:
+                addr_part, rest = line.split(": ", 1)
+                parts = rest.split(None, 1)
+                mnem = parts[0] if parts else rest
+                ops = parts[1] if len(parts) > 1 else ""
+                instructions.append(InstructionSchema(
+                    address=addr_part, mnemonic=mnem, operands=ops, raw_line=line
+                ))
+            else:
+                instructions.append(InstructionSchema(
+                    address="", mnemonic=line, operands="", raw_line=line
+                ))
+        return instructions
 
     async def batch_decompile(self, addresses: List[str]) -> List[str]:
         out = []
@@ -67,5 +87,54 @@ class GhidraAdapter(BaseAdapter):
         return out
 
     async def analyze_functions(self, addresses: List[str]) -> bool:
-        res = await self._rpc_call("ghidra_analyze_functions", {"addresses": addresses})
+        res = await self._call("ghidra_analyze_functions", {"addresses": addresses})
+        return res.get("success", False)
+
+    # ── Cross-References ──────────────────────────────────────────────────
+
+    async def get_xrefs(self, address: str) -> List[XrefSchema]:
+        res = await self._call("ghidra_get_xrefs", {"address": address})
+        xrefs = []
+        for x in res.get("xrefs", []):
+            xrefs.append(XrefSchema(
+                from_addr=x.get("from", ""),
+                to_addr=x.get("to", ""),
+                type=x.get("type", "Code")
+            ))
+        return xrefs
+
+    # ── Data & Strings ────────────────────────────────────────────────────
+
+    async def get_strings(self) -> List[StringSchema]:
+        res = await self._call("ghidra_get_strings")
+        return [StringSchema(**s) for s in res.get("strings", [])]
+
+    async def get_globals(self) -> List[GlobalVarSchema]:
+        res = await self._call("ghidra_get_globals")
+        return [GlobalVarSchema(**g) for g in res.get("globals", [])]
+
+    async def get_segments(self) -> List[SegmentSchema]:
+        res = await self._call("ghidra_get_segments")
+        return [SegmentSchema(**s) for s in res.get("segments", [])]
+
+    async def get_imports(self) -> List[ImportSchema]:
+        res = await self._call("ghidra_get_imports")
+        return [ImportSchema(**i) for i in res.get("imports", [])]
+
+    async def get_exports(self) -> List[ExportSchema]:
+        res = await self._call("ghidra_get_exports")
+        return [ExportSchema(**e) for e in res.get("exports", [])]
+
+    # ── Modification ──────────────────────────────────────────────────────
+
+    async def rename_symbol(self, address: str, name: str) -> bool:
+        res = await self._call("ghidra_rename_symbol", {"address": address, "name": name})
+        return res.get("success", False)
+
+    async def set_comment(self, address: str, comment: str, repeatable: bool = False) -> bool:
+        res = await self._call("ghidra_set_comment", {"address": address, "comment": comment, "repeatable": repeatable})
+        return res.get("success", False)
+
+    async def set_function_type(self, address: str, signature: str) -> bool:
+        res = await self._call("ghidra_set_function_type", {"address": address, "signature": signature})
         return res.get("success", False)

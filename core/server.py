@@ -5,7 +5,11 @@ from mcp.server.fastmcp import FastMCP
 from .session import SessionManager
 from adapters.ida import IDAAdapter
 from adapters.ghidra import GhidraAdapter
-from schemas.models import FunctionSchema, StringSchema, XrefSchema, ErrorSchema
+from schemas.models import (
+    FunctionSchema, StringSchema, XrefSchema,
+    InstructionSchema, CommentSchema, GlobalVarSchema,
+    SegmentSchema, ImportSchema, ExportSchema, ErrorSchema
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("UnifiedMCP")
@@ -28,6 +32,10 @@ def handle_error(e: Exception) -> dict:
     logger.error(f"Error executing tool: {e}")
     return ErrorSchema(message=str(e), code="TOOL_ERROR").model_dump()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Session Management
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @mcp.tool()
 def init_session(session_id: str, backend: str, binary_path: str, architecture: str, backend_url: str = "http://127.0.0.1:10101") -> str:
     """
@@ -40,9 +48,13 @@ def init_session(session_id: str, backend: str, binary_path: str, architecture: 
     except Exception as e:
         return json.dumps(handle_error(e))
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Decompilation & Function Listing
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @mcp.tool()
 async def get_function(session_id: str, address: str) -> Any:
-    """Get complete details for a specific function."""
+    """Get complete details for a specific function by address."""
     try:
         adapter = get_adapter(session_id)
         func = await adapter.get_function(address)
@@ -64,7 +76,7 @@ async def list_functions(session_id: str) -> Any:
 
 @mcp.tool()
 async def decompile_function(session_id: str, address: str) -> Any:
-    """Decompile a function at the given address."""
+    """Decompile a function at the given address and return C pseudocode."""
     try:
         adapter = get_adapter(session_id)
         code = await adapter.decompile_function(address)
@@ -73,38 +85,18 @@ async def decompile_function(session_id: str, address: str) -> Any:
         return handle_error(e)
 
 @mcp.tool()
-async def get_xrefs(session_id: str, address: str) -> Any:
-    """Get all cross-references to and from the given address."""
+async def disassemble_at(session_id: str, address: str) -> Any:
+    """Disassemble the function or block at the given address. Returns structured instruction data."""
     try:
         adapter = get_adapter(session_id)
-        xrefs = await adapter.get_xrefs(address)
-        return [x.model_dump(by_alias=True) for x in xrefs]
-    except Exception as e:
-        return handle_error(e)
-
-@mcp.tool()
-async def get_strings(session_id: str) -> Any:
-    """Extract strings from the binary."""
-    try:
-        adapter = get_adapter(session_id)
-        strings = await adapter.get_strings()
-        return [s.model_dump() for s in strings]
-    except Exception as e:
-        return handle_error(e)
-
-@mcp.tool()
-async def rename_symbol(session_id: str, address: str, name: str) -> Any:
-    """Rename a symbol or function at the specified address."""
-    try:
-        adapter = get_adapter(session_id)
-        success = await adapter.rename_symbol(address, name)
-        return {"success": success}
+        instructions = await adapter.disassemble_at(address)
+        return [i.model_dump() for i in instructions]
     except Exception as e:
         return handle_error(e)
 
 @mcp.tool()
 async def batch_decompile(session_id: str, addresses: list[str]) -> Any:
-    """Batch decompile multiple functions."""
+    """Batch decompile multiple functions at once."""
     try:
         adapter = get_adapter(session_id)
         codes = await adapter.batch_decompile(addresses)
@@ -118,6 +110,108 @@ async def analyze_functions(session_id: str, addresses: list[str]) -> Any:
     try:
         adapter = get_adapter(session_id)
         success = await adapter.analyze_functions(addresses)
+        return {"success": success}
+    except Exception as e:
+        return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cross-References
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def get_xrefs(session_id: str, address: str) -> Any:
+    """Get all cross-references to and from the given address."""
+    try:
+        adapter = get_adapter(session_id)
+        xrefs = await adapter.get_xrefs(address)
+        return [x.model_dump(by_alias=True) for x in xrefs]
+    except Exception as e:
+        return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Data & Strings
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def get_strings(session_id: str) -> Any:
+    """Extract all defined strings from the binary."""
+    try:
+        adapter = get_adapter(session_id)
+        strings = await adapter.get_strings()
+        return [s.model_dump() for s in strings]
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def get_globals(session_id: str) -> Any:
+    """Get global data items (named data labels) from the binary."""
+    try:
+        adapter = get_adapter(session_id)
+        globals_list = await adapter.get_globals()
+        return [g.model_dump() for g in globals_list]
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def get_segments(session_id: str) -> Any:
+    """Get all memory segments (.text, .data, .rdata, etc.) from the binary."""
+    try:
+        adapter = get_adapter(session_id)
+        segs = await adapter.get_segments()
+        return [s.model_dump() for s in segs]
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def get_imports(session_id: str) -> Any:
+    """Get all imported symbols (DLL imports, external references)."""
+    try:
+        adapter = get_adapter(session_id)
+        imports = await adapter.get_imports()
+        return [i.model_dump() for i in imports]
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def get_exports(session_id: str) -> Any:
+    """Get all exported symbols from the binary."""
+    try:
+        adapter = get_adapter(session_id)
+        exports = await adapter.get_exports()
+        return [e.model_dump() for e in exports]
+    except Exception as e:
+        return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Modification & Refactoring
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def rename_symbol(session_id: str, address: str, name: str) -> Any:
+    """Rename a symbol or function at the specified address."""
+    try:
+        adapter = get_adapter(session_id)
+        success = await adapter.rename_symbol(address, name)
+        return {"success": success}
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def set_comment(session_id: str, address: str, comment: str, repeatable: bool = False) -> Any:
+    """Set a comment at the given address. Use repeatable=True for comments that propagate to xrefs."""
+    try:
+        adapter = get_adapter(session_id)
+        success = await adapter.set_comment(address, comment, repeatable)
+        return {"success": success}
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def set_function_type(session_id: str, address: str, signature: str) -> Any:
+    """Apply a C function prototype/signature to the function at the given address. Example: 'int __fastcall foo(int a1, char *a2)'"""
+    try:
+        adapter = get_adapter(session_id)
+        success = await adapter.set_function_type(address, signature)
         return {"success": success}
     except Exception as e:
         return handle_error(e)

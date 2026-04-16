@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Verify server imports
+        run: |
+          uv run --with "mcp[cli]" --with pydantic --with aiohttp python -c "
+          import sys
+          sys.path.insert(0, '.')
+          from core.server import mcp
+          print('✅ Server imports verified successfully')
+          print(f'   Tools registered: {len(mcp._tool_manager._tools)}')
+          "
+
+      - name: Package release archive
+        run: |
+          mkdir -p dist
+          zip -r dist/unified-re-mcp-${{ github.ref_name }}.zip \
+            main.py \
+            AGENTS.md \
+            README.md \
+            LICENSE \
+            core/ \
+            adapters/ \
+            schemas/ \
+            plugins/ \
+            -x "**/__pycache__/*" "**/*.pyc"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/unified-re-mcp-${{ github.ref_name }}.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

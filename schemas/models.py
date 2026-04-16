@@ -25,3 +25,42 @@ class ErrorSchema(BaseModel):
     error: bool = True
     message: str
     code: str
+
+class InstructionSchema(BaseModel):
+    """Schema for a single disassembled instruction."""
+    address: str
+    mnemonic: str
+    operands: str = ""
+    raw_line: str = ""
+
+class CommentSchema(BaseModel):
+    """Schema for a comment set on an address."""
+    address: str
+    comment: str
+    repeatable: bool = False
+
+class GlobalVarSchema(BaseModel):
+    """Schema for a global data item."""
+    address: str
+    name: str
+    size: int = 0
+    value: Optional[str] = None
+
+class SegmentSchema(BaseModel):
+    """Schema for a memory segment."""
+    name: str
+    start_address: str
+    end_address: str
+    size: int
+    permissions: str = ""
+
+class ImportSchema(BaseModel):
+    """Schema for an imported symbol."""
+    address: str
+    name: str
+    module: str = ""
+
+class ExportSchema(BaseModel):
+    """Schema for an exported symbol."""
+    address: str
+    name: str
