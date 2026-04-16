@@ -3,25 +3,28 @@
 [![GitHub stars](https://img.shields.io/github/stars/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/network/members)
 [![GitHub contributors](https://img.shields.io/github/contributors/Homelycarlos/unified-re-mcp)](https://github.com/Homelycarlos/unified-re-mcp/graphs/contributors)
-[![Follow @lauriewired](https://img.shields.io/twitter/follow/lauriewired?style=social)](https://twitter.com/lauriewired)
 
 ![ghidra_MCP_logo](https://github.com/user-attachments/assets/4986d702-be3f-4697-acce-aea55cd79ad3)
 
 # Unified Reverse Engineering MCP Server
 
-Simple [MCP Server](https://modelcontextprotocol.io/introduction) to allow vibe reversing in both **IDA Pro** and **Ghidra** using a unified, stateless interface.
+Simple [MCP Server](https://modelcontextprotocol.io/introduction) to allow vibe reversing in IDA Pro and Ghidra.
 
-The binaries and dataset prompts for testing are compatible with standard prompt-engineering reversing methodology.
+https://github.com/user-attachments/assets/6ebeaa92-a9db-43fa-b756-eececce2aca0
 
-https://github.com/user-attachments/assets/36080514-f227-44bd-af84-78e29ee1d7f9
+The binaries and prompt for the video are available in the [mcp-reversing-dataset](https://github.com/mrexodia/mcp-reversing-dataset) repository.
+
+## Features
+
+- Decompile and analyze binaries in Ghidra and IDA Pro
+- Automatically rename methods and data
+- List methods, classes, imports, and exports
 
 ## Prerequisites
 
 - [Python](https://www.python.org/downloads/) (**3.11 or higher**)
-  - Use `idapyswitch` to bind IDA to your newest Python version if necessary.
-- [uv](https://docs.astral.sh/uv/) (highly recommended for automatic, sandboxed dependency execution)
-- [IDA Pro](https://hex-rays.com/ida-pro) (8.3 or higher, 9.x recommended), **IDA Free is not supported**
-- Ghidra + [GhidraMCP Plugin](https://github.com/LaurieWired/GhidraMCP/releases) *(If using the Ghidra backend)*
+  - Use `idapyswitch` to switch to the newest Python version
+- [IDA Pro](https://hex-rays.com/ida-pro) (8.3 or higher, 9 recommended), **IDA Free is not supported**
 - Supported MCP Client (pick one you like)
   - [Amazon Q Developer CLI](https://aws.amazon.com/q/developer/)
   - [Augment Code](https://www.augmentcode.com/)
@@ -44,122 +47,129 @@ https://github.com/user-attachments/assets/36080514-f227-44bd-af84-78e29ee1d7f9
   - [Warp](https://www.warp.dev/)
   - [Windsurf](https://windsurf.com)
   - [Zed](https://zed.dev/)
-  - [Other MCP Clients](https://modelcontextprotocol.io/clients#example-clients): Run `uv run main.py --config` to get the JSON config string.
+  - [Other MCP Clients](https://modelcontextprotocol.io/clients#example-clients): Run `uv run main.py --config` to get the JSON config.
 
 ## Installation
 
-Clone this repository to your local machine:
+Install the latest version of the Unified MCP Server:
 
 ```sh
 git clone https://github.com/Homelycarlos/unified-re-mcp.git
 cd unified-re-mcp
 ```
 
-Generate the exact configuration block for your MCP Client (like Cursor or Claude) by running:
-
-```sh
-uv run main.py --config
-```
-
-### 1. IDA Pro Configuration
-To allow the server to securely interact directly with your open database:
-1. Copy `plugins/ida/ida_backend_plugin.py` directly into your IDA Pro `plugins/` directory.
+### IDA Pro Integration
+1. Copy `plugins/ida/ida_backend_plugin.py` to your IDA Pro `plugins/` directory.
 2. Launch IDA Pro. 
 
-### 2. Ghidra Configuration
-First, download the latest [release](https://github.com/LaurieWired/GhidraMCP/releases) from the GhidraMCP repository. Then, securely import the plugin into Ghidra.
-
-1. Run Ghidra
-2. Select `File` -> `Install Extensions`
-3. Click the `+` button
-4. Select the `GhidraMCP-1-x.zip` from the downloaded release
-5. Restart Ghidra
-6. Make sure the GhidraMCPPlugin is enabled in `File` -> `Configure` -> `Developer`
+### Ghidra Integration
+1. Select `File` -> `Install Extensions`
+2. Click the `+` button
+3. Select the `GhidraMCP-1-x.zip` release
+4. Restart Ghidra
+5. Make sure the GhidraMCPPlugin is enabled in `File` -> `Configure` -> `Developer`
 
 Video Installation Guide:
 
 https://github.com/user-attachments/assets/75f0c176-6da1-48dc-ad96-c182eb4648c3
 
----
+## MCP Clients
 
-## Example 1: Claude Desktop
-To set up Claude Desktop as an MCP client, go to `Claude` -> `Settings` -> `Developer` -> `Edit Config` -> `claude_desktop_config.json` and add the config generated from `uv run main.py --config`.
+Theoretically, any MCP client should work. Three examples are given below.
 
-Alternatively, edit this file directly:
+### Example 1: Claude Desktop
+To set up Claude Desktop, go to `Claude` -> `Settings` -> `Developer` -> `Edit Config` -> `claude_desktop_config.json` and add the following:
+
+```json
+{
+  "mcpServers": {
+    "unified-re-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with", "mcp[cli]",
+        "--with", "pydantic",
+        "--with", "aiohttp",
+        "C:\\ABSOLUTE_PATH\\TO\\main.py"
+      ]
+    }
+  }
+}
 ```
-%APPDATA%\Claude\claude_desktop_config.json
-```
 
-**Important**: Make sure you completely restart your MCP client for the configuration to take effect. Some clients (like Claude Desktop) run in the background and must be explicitly quit from the tray icon.
+Alternatively, edit this file directly: `%APPDATA%\Claude\claude_desktop_config.json`
 
-## Example 2: Cline
-To use this with [Cline](https://cline.bot), go to the MCP servers panel at the top of your chat window.
-Select `Command`, and paste your `uv run` invocation exactly as written in the config output.
+**Important**: Make sure you completely restart your MCP client for the configuration to take effect.
+
+### Example 2: Cline
+In Cline, select `MCP Servers` at the top. Select `Command` and paste your `uv run` invocation.
+
 ![Cline select](https://github.com/user-attachments/assets/88e1f336-4729-46ee-9b81-53271e9c0ce0)
 
-## Example 3: 5ire
-Another MCP client that supports multiple models on the backend is [5ire](https://github.com/nanbingxyz/5ire). To set up the unified MCP, open 5ire and go to `Tools` -> `New` and set the following configurations:
+### Example 3: 5ire
+Open 5ire and go to `Tools` -> `New` and set the following configurations:
 
-1. Tool Key: `unified-re-mcp`
+1. Tool Key: unified-re-mcp
 2. Name: UnifiedRE
-3. Command: `uv run /ABSOLUTE_PATH_TO/main.py`
-
----
+3. Command: `uv run C:\ABSOLUTE_PATH_TO\main.py`
 
 ## Prompt Engineering
 
-LLMs are prone to hallucinations and you need to be specific with your prompting. For reverse engineering, context management is crucial. Below is a minimal example prompt:
+LLMs are prone to hallucinations and you need to be specific with your prompting. Below is a minimal example prompt:
 
 ```md
-Your task is to analyze a binary in IDA Pro/Ghidra using the MCP tools. In general, use the following strategy:
+Your task is to analyze a crackme in IDA Pro/Ghidra. You can use the MCP tools to retrieve information. In general use the following strategy:
 
-- Inspect the decompilation and analyze it carefully. 
-- Rename variables to more sensible names based on algorithmic patterns.
-- Change function names to describe their actual purpose within the binary.
-- If more details are necessary, pull cross-references to identify calling functions.
-- Create a report with your findings.
-- NEVER assume conclusions blindly. Derive all findings from actual analysis using MCP tools.
+- Inspect the decompilation and add comments with your findings
+- Rename variables to more sensible names
+- Change the variable and argument types if necessary
+- Change function names to be more descriptive
+- If more details are necessary, disassemble the function and add comments
+- NEVER convert number bases yourself. Use MCP tools if needed!
+- Do not attempt brute forcing, derive any solutions purely from the disassembly
+- Create a report.md with your findings
 ```
 
 ## Tips for Enhancing LLM Accuracy
 
-Large Language Models (LLMs) are powerful tools, but they will not perform well on heavily obfuscated code. Before handing the database over to the LLM agent, take a look around the binary and spend some time removing:
+Large Language Models (LLMs) are powerful tools, but they can sometimes struggle. Another thing to keep in mind is that LLMs will not perform well on obfuscated code. Spend some time removing:
 
 - String encryption
 - Import hashing
 - Control flow flattening
 - Anti-decompilation tricks
 
-You should also use tools like Lumina or FLIRT to resolve open-source library code (like the C++ STL). This enormously reduces the token count sent to the LLM and improves context accuracy.
+You should also use a tool like Lumina or FLIRT to try and resolve all the open source library code and the C++ STL, this will further improve the accuracy.
 
-## Core Capabilities
+## Core Operations
 
-Because this server implements the standard MCP JSON-RPC protocol asynchronously over `stdio`, it exposes universal access to:
-
-- **Detailed Decompilation**: Pull C-pseudocode directly from Hex-Rays or Ghidra.
-- **Intelligent Renaming**: Update global variables, locals, and function symbol tables dynamically.
-- **Cross-Referencing**: Fast querying of `xrefs_to` and `xrefs_from` to map executable flows.
-- **Backend Portability**: The same MCP command set transparently maps between both IDA and Ghidra environments depending on your chosen adapter.
+- `lookup_funcs(queries)`: Get function(s) by address or name.
+- `int_convert(inputs)`: Convert numbers to different formats.
+- `decompile(addr)`: Decompile function at the given address.
+- `xrefs_to(addrs)`: Get all cross-references to address(es).
+- `analyze_funcs(addrs)`: Comprehensive function analysis.
 
 ## Comparison with other MCP servers
 
-There are a few IDA Pro MCP servers floating around, but we created the Unified Reverse Engineering Server for a few distinct reasons:
+There are a few MCP servers floating around, but I created my own for a few reasons:
 
-1. **Stateless execution model**: `SessionManager` ensures perfect async handling and environment separation.
-2. **Pydantic Validation**: Impossible to pass malformed arguments to the engine; everything is validated via JSON Schema automatically generated and sent to the LLM. 
-3. **Multi-Backend**: Supports both IDA Pro and Ghidra seamlessly without modifying the AI agent's core prompts or tool-calling behavior.
+1. Installation should be fully automated.
+2. The architecture makes it easy to add new functionality without too much boilerplate.
+3. Learning new technologies is fun!
 
 ## Development
 
-Adding new features is exceptionally streamlined thanks to `fastmcp`. Simply drop a Python function decorated with `@mcp.tool()` into `server.py`, strictly type-hint its arguments, and you are done. The Pydantic validator handles JSON-schema generation and argument routing automatically.
+Adding new features is a super easy and streamlined process. All you have to do is add a new `@mcp.tool()` function.
 
-To test the MCP server independently without an AI agent:
+To test the MCP server itself:
 
 ```sh
 npx -y @modelcontextprotocol/inspector uv run main.py
 ```
 
 ### Building Ghidra Dependencies from Source
-If modifying the core Ghidra adapter, you may need to rebuild it manually.
-1. Copy the core `Ghidra` `.jar` files to `lib/`.
-2. Build with Maven by running: `mvn clean package assembly:single`
+1. Copy the following files from your Ghidra directory to `lib/`:
+- `Base.jar`, `Decompiler.jar`, `Docking.jar`, `Generic.jar`, `Project.jar`, `SoftwareModeling.jar`, `Utility.jar`, `Gui.jar`
+2. Build with Maven by running:
+
+`mvn clean package assembly:single`
