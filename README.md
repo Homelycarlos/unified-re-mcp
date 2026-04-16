@@ -6,24 +6,28 @@
 
 # ⚡ Unified Reverse Engineering MCP Server
 
-The **Unified Reverse Engineering MCP Server** is a powerful, stateless Model Context Protocol interface that seamlessly bridges both **IDA Pro** and **Ghidra** into a single, cohesive AI-driven reversing environment. 
+The **Unified Reverse Engineering MCP Server** is an enterprise-grade, stateless [Model Context Protocol](https://modelcontextprotocol.io/) framework that securely bridges **IDA Pro** and **Ghidra** into a single, cohesive AI-driven reverse engineering environment.
 
-Designed from the ground up for strict determinism and thread-safety, this server enables AI coding agents to autonomously decompile functions, rename symbols, and fetch cross-references without requiring manual UI interaction.
-
----
-
-## 🌟 Architecture & Features
-
-This project was built to address the boilerplate and state-leaking issues of older MCP plugins:
-
-1. **Stateless Session Management**: A built-in `SessionManager` perfectly isolates concurrent tool requests using unique `session_id` identifiers, completely eliminating global state leaks.
-2. **Pydantic Validation**: It is impossible to pass malformed arguments to the reverse engineering engines. All inputs and outputs are normalized to strict JSON-RPC 2.0 schemas.
-3. **Multi-Backend Simplicity**: Write one prompt, use one client workflow, and seamlessly toggle between IDA Pro and Ghidra datasets securely over local background HTTP adapters.
-4. **FastMCP Integration**: Fully asynchronous routing using standard stdio out of the box.
+Designed from the ground up to prevent global state leaks and enforce strict typing, this server enables AI coding agents to autonomously navigate binaries, decompile functions, intelligently rename symbols, and fetch complex cross-references over `stdio` without requiring any manual UI interaction.
 
 ---
 
-## Prerequisites
+## 🌟 Core Architecture & Features
+
+This project was built to address the boilerplate, unvalidated inputs, and state leakage issues of older standalone MCP plugins:
+
+1. **Stateless Session Management (`SessionManager`)**: 
+   When an AI agent connects, it requests a `session_id`. All subsequent actions are securely sandboxed to that session. This enables multiple agents, or multiple instances of an agent, to safely analyze entirely different binaries across different backends simultaneously without state interference.
+2. **Pydantic Tool Validation**: 
+   It is fundamentally impossible to pass malformed arguments to the engine. All inputs and outputs are automatically marshaled into strict JSON-RPC 2.0 schemas. If an AI hallucinates an argument format, it will receive an immediate descriptive Pydantic feedback error rather than crashing the Hex-Rays decompiler.
+3. **Multi-Backend API Simplicity**:
+   A single, unified Python `BaseAdapter` abstraction governs both Ghidra and IDA. You can write one AI prompt, securely use one client workflow, and hot-swap between an IDA Pro database and a Ghidra dataset frictionlessly depending on the target.
+4. **FastMCP Integration**: 
+   Leverages standard standard I/O for instantaneous asynchronous message parsing. No hacky socket overhead delays.
+
+---
+
+## 🛠️ Prerequisites
 
 - [Python](https://www.python.org/downloads/) (**3.11 or higher**)
   - Use `idapyswitch` to switch to the newest Python version
@@ -31,8 +35,7 @@ This project was built to address the boilerplate and state-leaking issues of ol
 - Supported MCP Client (pick one you like)
   - [Amazon Q Developer CLI](https://aws.amazon.com/q/developer/)
   - [Augment Code](https://www.augmentcode.com/)
-  - [Claude](https://claude.ai/download)
-  - [Claude Code](https://www.anthropic.com/code)
+  - [Claude](https://claude.ai/download) & [Claude Code](https://www.anthropic.com/code)
   - [Cline](https://cline.bot)
   - [Codex](https://github.com/openai/codex)
   - [Copilot CLI](https://docs.github.com/en/copilot)
@@ -47,16 +50,15 @@ This project was built to address the boilerplate and state-leaking issues of ol
   - [Qwen Coder](https://qwenlm.github.io/qwen-code-docs/)
   - [Roo Code](https://roocode.com)
   - [Trae](https://trae.ai/)
-  - [VS Code](https://code.visualstudio.com/)
-  - [VS Code Insiders](https://code.visualstudio.com/insiders)
+  - [VS Code](https://code.visualstudio.com/) & [Insiders](https://code.visualstudio.com/insiders)
   - [Warp](https://www.warp.dev/)
   - [Windsurf](https://windsurf.com)
   - [Zed](https://zed.dev/)
-  - [Other MCP Clients](https://modelcontextprotocol.io/clients#example-clients): Run `uv run main.py --config` to get the JSON config for your client.
+  - [Other MCP Clients](https://modelcontextprotocol.io/clients#example-clients): Run `uv run main.py --config` to get the JSON config.
 
 ---
 
-## 🚀 Installation
+## 🚀 Installation & Integration
 
 Install the latest version of the Unified MCP Server by cloning this repository:
 
@@ -66,18 +68,19 @@ cd unified-re-mcp
 ```
 
 ### 1. IDA Pro Integration
-For the server to instantly interact with your IDA databases:
+For the server to securely interact with your IDA instance natively:
 1. Copy `plugins/ida/ida_backend_plugin.py` to your IDA Pro `plugins/` directory.
-2. Launch IDA Pro. A background thread will securely start listening on port `10101`.
+2. Launch IDA Pro. 
+3. The plugin will execute via `PLUGIN_FIX` and spin up an isolated background HTTP listener automatically bound to IDA's execution thread (`ida_kernwin.execute_sync`) to prevent database corruption.
 
 ### 2. Ghidra Integration
-The unified MCP server supports dispatching queries directly to Ghidra HTTP server plugins (such as GhidraMCP). You must have a compatible background listener running in Ghidra for the server to forward `session_id` mapped queries securely.
+The unified MCP server supports dispatching structural queries directly to existing Ghidra HTTP server plugin installations. You must have a compatible background listener running in Ghidra for the `ghidra` adapter to forward parameters successfully.
 
 ---
 
 ## 💻 MCP Client Configuration
 
-Because `unified-re-mcp` is universally compatible, you can configure any client easily.
+Because `unified-re-mcp` is universally compatible with standard `stdio`, you can configure any modern client frictionlessly.
 
 ### Example 1: Claude Desktop
 Run `uv run main.py --config` to generate your exact path config, or add the following to `%APPDATA%\Claude\claude_desktop_config.json`:
@@ -112,47 +115,68 @@ Open 5ire and go to `Tools` -> `New` and set the following configurations:
 
 ---
 
+## ⚙️ Standardized Core Operations 
+
+The Unified MCP Server currently exposes several highly validated cross-backend tools directly to the agent. Below is a subset of operations currently supported:
+
+| Tool Invocation | Description | Backend Support |
+|---|---|---|
+| `list_functions()` | Retrieve a paginated array of valid functions natively decoded from the binary to search. | IDA & Ghidra |
+| `get_function_decompilation(addr)` | Safely generates and fetches C-pseudocode abstract syntax tree interpretations from Hex-Rays/Ghidra. | IDA & Ghidra |
+| `get_function_xrefs(addr)` | Provides structured arrays of `xrefs_to` and `xrefs_from` dictating deep execution block flows. | IDA & Ghidra |
+| `rename_symbol(addr, int, type)` | Pushes intelligent algorithmic renaming directly into the live IDE database safely. | IDA & Ghidra |
+| `find_strings()` | Extracts mapped ASCII/UTF-8 datasegments dynamically for string analysis. | IDA & Ghidra |
+
+---
+
 ## 🧠 Prompt Engineering
 
-LLMs are prone to hallucinations, so precise prompting is critical. Below is a minimal, proven example prompt for use with our unified tools:
+LLMs are prone to hallucinations, so precise prompting is critical. Below is a minimal, proven example prompt for use with our unified framework:
 
 ```md
 Your task is to analyze a crackme binary. You can use the MCP tools to interact with my open IDA/Ghidra instance. Please strictly follow this systematic methodology:
 
-1. **Decompilation Analysis**: Inspect the decompilation via tools, and analyze it carefully. 
-2. **Readability**: Rename variables to sensible names based on algorithmic patterns. Change function names to describe their actual purpose.
-3. **Deep Dives**: If more details are necessary, pull cross-references to identify calling functions or examine disassembly.
-4. **Constraints**: NEVER convert number bases yourself. NEVER assume conclusions blindly. Derive all findings purely from tool data.
-5. **Documentation**: Create a report at the end with your findings.
+1. **Decompilation Analysis**: Inspect the decompilation using `get_function_decompilation`, and analyze it carefully block-by-block. 
+2. **Readability**: Rename variables using `rename_symbol` to sensible names based on algorithmic patterns. Change function names to describe their actual operational purpose.
+3. **Deep Dives**: If more details are necessary, pull cross-references using `get_function_xrefs` to identify calling functions or examine the entry points.
+4. **Constraints**: NEVER convert number bases yourself. NEVER assume compiler structures blindly. Derive all findings purely from tool data.
+5. **Documentation**: Create a comprehensive markdown report listing execution flows you discovered.
 ```
 
 ## 🎯 Tips for Enhancing LLM Accuracy
 
-Large Language Models (LLMs) are powerful tools, but they can struggle with extreme mathematical evaluation and heavy obfuscation. To guarantee accurate responses from the LLM agent, prepare the binary beforehand:
+Large Language Models (LLMs) are powerful heuristic pattern matchers, but they will struggle to bypass complex virtualization. To guarantee absolute accuracy, preprocess the binary:
 
-- Fix control flow flattening
-- Strip string encryption
-- Resolve import hashing and API hiding
-- Reconstruct anti-decompilation tricks
+- Eliminate basic control flow flattening
+- Unwrap inline string encryption
+- Unmap import hashing APIs
+- Restore basic IDA function bounds before prompt submission
 
-Additionally, use tools like Lumina or FLIRT to resolve open-source library code (like the C++ STL). This enormously reduces the token count sent to the LLM and gives it incredible contextual accuracy.
+Furthermore, apply libraries like FLIRT or Lumina signatures. Replacing `sub_401100` with `std::string::append` eliminates hundreds of lines of noise from the LLM context, massively reducing operational errors.
 
 ---
 
-## ⚙️ Core Operations
+## 🛠️ Extensibility & Development
 
-The Unified MCP Server currently exposes several highly validated tools:
+Integrating additional tools into `unified-re-mcp` is intentionally frictionless. There is absolute zero traditional socket or routing boilerplate.
 
-- `get_function_decompilation(address)`: Safely pulls raw C pseudocode from either Hex-Rays or Ghidra decompilers.
-- `rename_symbol(address, new_name)`: Pushes intelligent renaming back into the database.
-- `get_function_xrefs(address)`: Pulls cross-reference mappings (`xrefs_to`, `xrefs_from`) for deep execution flow analysis.
+### Example: Adding a New Tool
 
-## 🛠️ Development
+Simply drop a new Python function explicitly decorated with `@mcp.tool()` inside `server.py`, fully type-hint the arguments, and you're done. 
 
-Adding new features into `unified-re-mcp` is a streamlined process. There is no heavy boilerplate. Simply add a new function decorated with `@mcp.tool()` inside `server.py`, type-hint it, and the schema will auto-generate!
+```python
+@mcp.tool()
+async def read_memory_bytes(ctx: Context, address: int, size: int) -> bytes:
+    """ Reads raw operative bytes directly from the database memory map. """
+    session = await manager.get_session(ctx.session_id)
+    return await session.adapter.read_memory(address, size)
+```
+The underlying `fastmcp` validator will autonomously detect the `address: int` and auto-generate the strict JSON-RPC payload interface schemas.
 
-To independently debug or test the server without an LLM attached, run the MCP inspector:
+### Local Tool Testing
+To independently debug or test the server without spinning up a live LLM chat:
 
 ```sh
 npx -y @modelcontextprotocol/inspector uv run main.py
 ```
+This runs a local web debugger where you can click buttons to instantly fire custom JSON test schemas directly at the server.
