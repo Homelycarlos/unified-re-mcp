@@ -195,6 +195,7 @@ if __name__ == "__main__":
         auto_install()
 
     # Determine transport mode
+    import time
     transport = "stdio"
     port = 8080
 
@@ -210,7 +211,47 @@ if __name__ == "__main__":
 
     if transport == "sse":
         print(f"[*] Starting NEXUSRE MCP SERVER with SSE transport on port {port}...")
+        
+        # Setup Auth & Rate Limiting for SSE
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import JSONResponse
+        from collections import defaultdict
+        
+        API_KEY = os.environ.get("NEXUSRE_API_KEY")
+        if API_KEY:
+            print("[+] API Key authentication ENABLED.")
+        else:
+            print("[!] Warning: NEXUSRE_API_KEY not set. API is unauthenticated!")
+
+        class SecurityMiddleware(BaseHTTPMiddleware):
+            def __init__(self, app):
+                super().__init__(app)
+                self.rate_limits = defaultdict(list)
+                self.MAX_REQUESTS = 100  # 100 requests per minute
+
+            async def dispatch(self, request, call_next):
+                client_ip = request.client.host if request.client else "unknown"
+                
+                # Check Auth
+                if API_KEY:
+                    auth_header = request.headers.get("Authorization", "")
+                    if auth_header != f"Bearer {API_KEY}":
+                        return JSONResponse({"error": "Unauthorized. Invalid API Key."}, status_code=401)
+                
+                # Rate Limiting
+                now = time.time()
+                self.rate_limits[client_ip] = [t for t in self.rate_limits[client_ip] if now - t < 60]
+                if len(self.rate_limits[client_ip]) >= self.MAX_REQUESTS:
+                    return JSONResponse({"error": "Rate limit exceeded. Try again later."}, status_code=429)
+                self.rate_limits[client_ip].append(now)
+
+                return await call_next(request)
+
+        # Inject middleware into FastMCP's underlying Starlette app
+        mcp._app.add_middleware(SecurityMiddleware)
+
         mcp.run(transport="sse", port=port)
     else:
         # Start the fastMCP server via standard CLI execution (stdio)
         mcp.run()
+
