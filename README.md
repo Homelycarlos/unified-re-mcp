@@ -31,7 +31,7 @@ Usually, a developer writes a Python script for IDA, a Lua script for Cheat Engi
 **The Pitch**: NexusRE lets you connect Cursor or Claude to all of them at once. You can highlight a piece of C++ SDK code in Cursor and say, *"Claude, check x64dbg to see what the live register value is here,"* and the AI will actually reach into the debugger and check for you.
 
 <div align="center">
-  <i>(Insert Video of the AI fixing a broken signature automatically)</i>
+  <i>/i>
 </div>
 
 ---
