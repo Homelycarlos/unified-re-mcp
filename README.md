@@ -20,32 +20,25 @@ Instead of writing isolated scripts for IDA, x64dbg, or Cheat Engine, NexusRE ac
 
 ## 🔥 Killer Features
 
-### 1. 🤖 AI Auto-Signature Recovery
-Game updated? Say goodbye to spending 4 hours in IDA fixing broken offsets. 
-NexusRE tracks your memory signatures in its persistent **Brain DB**. When a patch drops, the MCP automatically diffs the dead signatures, analyzes cross-references in the new binary, and generates fixed patterns instantly. 
+### 1. The "Game Updated" Auto-Healer (The Biggest Selling Point)
+Every time a game updates, cheats break because memory offsets and AOBs (signatures) change. Usually, a developer has to drop everything, open IDA, and spend hours fixing them.
 
-```python
-# AI automatically triggers this when offsets break
-auto_recover_signatures(session_id="ida_master", game="r6siege")
-```
+**The Pitch**: Tell them NexusRE has an AI-driven `auto_recover_signatures` engine. When a game patches, the MCP automatically diffs the old signatures, analyzes the cross-references in the new binary, and spits out a fixed `offsets.json`. What used to take 4 hours now takes 4 minutes.
 
-### 2. 🔀 Multi-Backend Cross-Analysis
-Connect Claude to **IDA Pro (Static)** and **x64dbg (Dynamic)** simultaneously. The AI can pull the decompiled C pseudocode from IDA, while fetching the live runtime memory and register state from x64dbg at the exact same address.
+### 2. The Universal Bridge
+Usually, a developer writes a Python script for IDA, a Lua script for Cheat Engine, and a C++ plugin for x64dbg.
 
-### 3. 👻 Undetected DMA Hardware Support
-NexusRE supports physical PCIe DMA cards (PCILeech/Raptor). With standard Cheat Engine tools, Ring-0 Anti-Cheats (EAC, Vanguard) will ban you. With the `dma` backend, the AI executes 100% undetected physical memory reads/writes straight over the motherboard's electrical bus.
+**The Pitch**: NexusRE lets you connect Cursor or Claude to all of them at once. You can highlight a piece of C++ SDK code in Cursor and say, *"Claude, check x64dbg to see what the live register value is here,"* and the AI will actually reach into the debugger and check for you.
 
----
+### 3. The Cyberpunk Web Dashboard & Discord Bot
+Developers love tools that look good and make them feel like "operators."
 
-## 💻 Cyberpunk Dashboard
+**The Pitch**: The real-time React dashboard and Discord bot aren't just utilities—they are command centers. A team of developers can run NexusRE on a shared server, get Discord alerts the moment an offset breaks, and view a beautiful graphical dashboard of their cheat's health.
 
-NexusRE comes with a gorgeous, real-time React Web Dashboard and a built-in Discord Bot daemon.
-
-* **Live Polling:** Watch your active sessions blink green/red in real-time.
-* **Signature Health:** See exactly which AOB patterns broke after a game update.
-* **Audit Log:** Watch a terminal feed of every command Cursor/Claude is executing on your debugger.
-
-*(Insert GIF of Dashboard Here)*
+<div align="center">
+  <i>(Insert GIF of the Cyberpunk Web Dashboard)</i><br/>
+  <i>(Insert Video of the AI fixing a broken signature automatically)</i>
+</div>
 
 ---
 
