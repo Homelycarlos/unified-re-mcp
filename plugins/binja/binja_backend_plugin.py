@@ -394,13 +394,15 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
         pass
 
 
+from http.server import ThreadingHTTPServer
+
 def start_server_thread():
     global SERVER_INSTANCE
     if SERVER_INSTANCE:
         return
     PORT = 10104
-    SERVER_INSTANCE = HTTPServer(('127.0.0.1', PORT), MCPRequestHandler)
-    print(f"[Binja-MCP] Server listening natively on port {PORT}")
+    SERVER_INSTANCE = ThreadingHTTPServer(('127.0.0.1', PORT), MCPRequestHandler)
+    print(f"[Binja-MCP] Server listening natively on port {PORT} (Threaded)")
     SERVER_INSTANCE.serve_forever()
 
 def start_mcp_server(bv):

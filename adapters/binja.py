@@ -15,13 +15,35 @@ class BinjaAdapter(BaseAdapter):
     def __init__(self, backend_url: str):
         # Default binja port if no port given (e.g. 10104)
         self.base_url = backend_url
+        self._cache = {}
 
     async def _call(self, action: str, args: dict = None) -> dict:
-        payload = {"action": action, "args": args or {}}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        import asyncio
+        args = args or {}
+        cacheable_actions = ["binja_list_functions", "binja_get_strings", "binja_get_globals", "binja_get_segments", "binja_get_imports", "binja_get_exports"]
+        cache_key = None
+        if action in cacheable_actions:
+            cache_key = f"{action}:{hash(frozenset(args.items()))}"
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+
+        payload = {"action": action, "args": args}
+        timeout = aiohttp.ClientTimeout(total=30)
+        
+        for attempt in range(3):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+                        if cache_key:
+                            self._cache[cache_key] = data
+                        return data
+            except Exception as e:
+                if attempt == 2:
+                    raise Exception(f"Fatal Binja connection error after 3 retries: {e}")
+                await asyncio.sleep(0.5)
+        return {}
 
     # ── Core Integration ──────────────────────────────────────────────────
 

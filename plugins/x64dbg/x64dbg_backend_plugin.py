@@ -224,10 +224,12 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
         pass
 
 
+from http.server import ThreadingHTTPServer
+
 def start_server():
     try:
         PORT = 10103
-        server = HTTPServer(('127.0.0.1', PORT), MCPRequestHandler)
+        server = ThreadingHTTPServer(('127.0.0.1', PORT), MCPRequestHandler)
         # We can't easily print to x64dbg console from a thread without explicit thread-safe APIs,
         # but this prints to the external stdout if launched cleanly.
         server.serve_forever()

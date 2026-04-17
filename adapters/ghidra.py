@@ -15,14 +15,35 @@ class GhidraAdapter(BaseAdapter):
     """
     def __init__(self, backend_url: str):
         self.base_url = backend_url
+        self._cache = {}
 
     async def _call(self, action: str, args: dict = None) -> dict:
-        """Issue a single JSON POST to the Ghidra background HTTP server."""
-        payload = {"action": action, "args": args or {}}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        import asyncio
+        args = args or {}
+        cacheable_actions = ["ghidra_list_functions", "ghidra_get_strings", "ghidra_get_globals", "ghidra_get_segments", "ghidra_get_imports", "ghidra_get_exports"]
+        cache_key = None
+        if action in cacheable_actions:
+            cache_key = f"{action}:{hash(frozenset(args.items()))}"
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+
+        payload = {"action": action, "args": args}
+        timeout = aiohttp.ClientTimeout(total=30)
+        
+        for attempt in range(3):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+                        if cache_key:
+                            self._cache[cache_key] = data
+                        return data
+            except Exception as e:
+                if attempt == 2:
+                    raise Exception(f"Fatal Ghidra connection error after 3 retries: {e}")
+                await asyncio.sleep(0.5)
+        return {}
 
     # ── Decompilation & Function Listing ──────────────────────────────────
 

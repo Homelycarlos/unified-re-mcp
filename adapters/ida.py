@@ -15,14 +15,42 @@ class IDAAdapter(BaseAdapter):
     """
     def __init__(self, backend_url: str):
         self.base_url = backend_url
+        self._cache = {}
 
     async def _call(self, action: str, args: dict = None) -> dict:
-        """Issue a single JSON POST to the IDA background HTTP server."""
-        payload = {"action": action, "args": args or {}}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        """Issue a JSON POST to the background HTTP server with Retry + Caching."""
+        import asyncio
+        args = args or {}
+        
+        # 1. Caching for read-only mass data endpoints
+        # These are entirely deterministic data structures in static analysis.
+        cacheable_actions = ["get_functions", "get_strings", "get_globals", "get_segments", "get_imports", "get_exports"]
+        cache_key = None
+        if action in cacheable_actions:
+            # Create a string key out of args for the dictionary hash
+            cache_key = f"{action}:{hash(frozenset(args.items()))}"
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+
+        payload = {"action": action, "args": args}
+        
+        # 2. 3x Retry Loop for Stability & Timeout protection
+        timeout = aiohttp.ClientTimeout(total=30)
+        for attempt in range(3):
+            try:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(f"{self.base_url}/rpc", json=payload) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+                        # Save to cache if it's a read op
+                        if cache_key:
+                            self._cache[cache_key] = data
+                        return data
+            except Exception as e:
+                if attempt == 2:
+                    raise Exception(f"Fatal IDA connection error after 3 retries: {e}")
+                await asyncio.sleep(0.5)
+        return {}
 
     # ── Decompilation & Function Listing ──────────────────────────────────
 
