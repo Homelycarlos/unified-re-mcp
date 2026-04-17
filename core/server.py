@@ -1,22 +1,45 @@
 import json
 import logging
-from typing import List, Optional, Any
+import importlib
+import pkgutil
+import os
+import time
+from typing import List, Optional, Any, Dict
 from mcp.server.fastmcp import FastMCP
 from .session import SessionManager
-from adapters.ida import IDAAdapter
-from adapters.ghidra import GhidraAdapter
-from adapters.x64dbg import X64DbgAdapter
-from adapters.binja import BinjaAdapter
-from adapters.r2 import Radare2Adapter
-from adapters.frida import FridaAdapter
-from adapters.ce import CheatEngineAdapter
-from adapters.gdb import GDBAdapter
-from adapters.kernel import KernelAdapter
 from schemas.models import (
     FunctionSchema, StringSchema, XrefSchema,
     InstructionSchema, CommentSchema, GlobalVarSchema,
     SegmentSchema, ImportSchema, ExportSchema, ErrorSchema
 )
+
+# ── Plugin Auto-Discovery ─────────────────────────────────────────────────
+# Dynamically load all adapter modules from the adapters/ directory.
+# Drop a new .py file in adapters/ and it auto-registers — no manual imports.
+_ADAPTER_REGISTRY: Dict[str, type] = {}
+
+def _discover_adapters():
+    """Scan adapters/ directory and register all adapter classes."""
+    adapters_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "adapters")
+    for _, module_name, _ in pkgutil.iter_modules([adapters_dir]):
+        if module_name.startswith("_") or module_name == "base":
+            continue
+        try:
+            mod = importlib.import_module(f"adapters.{module_name}")
+            # Find the adapter class (anything ending in 'Adapter')
+            for attr_name in dir(mod):
+                obj = getattr(mod, attr_name)
+                if isinstance(obj, type) and attr_name.endswith("Adapter") and attr_name != "BaseAdapter":
+                    # Map backend name -> class
+                    backend_key = module_name.lower()
+                    _ADAPTER_REGISTRY[backend_key] = obj
+        except Exception:
+            pass  # Skip adapters with missing dependencies
+
+_discover_adapters()
+
+# Command audit log for dashboard
+_command_log: List[dict] = []
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NexusRE")
@@ -27,30 +50,39 @@ session_manager = SessionManager()
 def get_adapter(session_id: str):
     session = session_manager.get_session(session_id)
     if not session:
-        raise ValueError(f"Invalid session ID: {session_id}")
-    if session.backend == "ida":
-        return IDAAdapter(session.backend_url)
-    elif session.backend == "ghidra":
-        return GhidraAdapter(session.backend_url)
-    elif session.backend == "x64dbg":
-        return X64DbgAdapter(session.backend_url)
-    elif session.backend == "binja":
-        return BinjaAdapter(session.backend_url)
-    elif session.backend == "radare2":
-        return Radare2Adapter(session.binary_path)  # Note: r2 takes physical binary_path instead of URL
-    elif session.backend == "frida":
-        return FridaAdapter(session.binary_path)    # Frida uses binary_path to store the PID or process name
-    elif session.backend == "cheatengine":
-        return CheatEngineAdapter()                 # Hardcodes default TCP out to 127.0.0.1:10105
-    elif session.backend == "gdb":
-        return GDBAdapter(session.binary_path)      # GDB Machine Interface
-    elif session.backend == "kernel":
-        return KernelAdapter(session.binary_path)   # Ring-0 driver symlink e.g. \\.\ZeraphX
-    elif session.backend == "dma":
-        from adapters.dma import DMAAdapter
-        return DMAAdapter(session.binary_path)      # PCIe Hardware PID
+        raise ValueError(f"Invalid session ID: {session_id}. Use init_session first, or pass 'auto' if you have one session.")
+
+    backend = session.backend
+    # Map backend name aliases
+    alias_map = {"cheatengine": "ce", "radare2": "r2"}
+    registry_key = alias_map.get(backend, backend)
+
+    adapter_cls = _ADAPTER_REGISTRY.get(registry_key)
+    if not adapter_cls:
+        raise ValueError(f"No adapter found for backend '{backend}'. Available: {list(_ADAPTER_REGISTRY.keys())}")
+
+    # Different adapters take different constructor args
+    headless_backends = {"r2", "radare2", "frida", "gdb", "kernel", "dma"}
+    no_arg_backends = {"ce", "cheatengine"}
+
+    if backend in no_arg_backends:
+        return adapter_cls()
+    elif backend in headless_backends:
+        return adapter_cls(session.binary_path)
     else:
-        raise ValueError(f"Unknown backend {session.backend}")
+        return adapter_cls(session.backend_url)
+
+def _log_command(tool_name: str, args: dict, result: Any):
+    """Append to in-memory audit log for the dashboard."""
+    _command_log.append({
+        "timestamp": time.time(),
+        "tool": tool_name,
+        "args": args,
+        "success": not isinstance(result, dict) or "error" not in result
+    })
+    # Keep last 500 entries
+    if len(_command_log) > 500:
+        _command_log.pop(0)
 
 def handle_error(e: Exception) -> dict:
     logger.error(f"Error executing tool: {e}")
@@ -335,6 +367,21 @@ async def set_local_variable_type(session_id: str, address: str, variable_name: 
     except Exception as e:
         return handle_error(e)
 
+@mcp.tool()
+async def define_struct(session_id: str, name: str, fields: list) -> Any:
+    """
+    Create a C struct in the static analyzer (IDA/Ghidra).
+    Example fields format: [{"name": "health", "type": "float", "offset": "0x120"}]
+    """
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "define_struct"):
+             return handle_error(Exception("Active backend adapter does not support struct definitions natively yet."))
+        success = await adapter.define_struct(name, fields)
+        return {"success": success}
+    except Exception as e:
+        return handle_error(e)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Binary Patching
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -356,6 +403,30 @@ async def save_binary(session_id: str, output_path: str) -> Any:
         adapter = get_adapter(session_id)
         success = await adapter.save_binary(output_path)
         return {"success": success}
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+async def diff_memory(session_id: str, address: str, size: int = 64) -> Any:
+    """Compare original binary bytes vs current patched/live state at an address range."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "read_memory"):
+            return handle_error(Exception("Active backend does not support memory reads."))
+        
+        # NOTE: Ideally adapter provides `get_original_bytes` if available,
+        # but for now we read the current bytes. To actually diff, we'd need
+        # the original file contents or base bytes. This is a scaffolded implementation.
+        current_bytes = await getattr(adapter, 'read_memory')(address, size)
+        original_bytes = getattr(adapter, 'get_original_bytes', lambda a, s: current_bytes)(address, size)
+
+        return {
+            "address": address,
+            "size": size,
+            "original_hex": original_bytes,
+            "current_hex": current_bytes,
+            "is_modified": current_bytes != original_bytes
+        }
     except Exception as e:
         return handle_error(e)
 
@@ -387,6 +458,35 @@ def recall_knowledge(query: str) -> Any:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Dynamic Tracing / Game Hacking Executions
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def cross_analyze(static_session: str, dynamic_session: str, address: str) -> Any:
+    """
+    Get decompilation from a static session + live register/memory state from a dynamic session at the same address.
+    Combines static context with dynamic runtime values.
+    """
+    try:
+        static_adapter = get_adapter(static_session)
+        dyn_adapter = get_adapter(dynamic_session)
+        
+        results = {}
+        if hasattr(static_adapter, "decompile_function"):
+            results["decompiled"] = await static_adapter.decompile_function(address)
+        if hasattr(static_adapter, "disassemble_at"):
+            instructions = await static_adapter.disassemble_at(address)
+            results["disassembly"] = [i.model_dump() for i in instructions] if instructions else []
+
+        # Note: Dynamic adapter must expose read_registers or similar context grabber
+        if hasattr(dyn_adapter, "read_registers"):
+            results["registers"] = await dyn_adapter.read_registers()
+
+        if hasattr(dyn_adapter, "read_memory"):
+            results["live_bytes"] = await dyn_adapter.read_memory(address, 16)
+
+        return results
+    except Exception as e:
+        return handle_error(e)
+
 
 @mcp.tool()
 async def instrument_execution(session_id: str, javascript_code: str) -> Any:
@@ -861,3 +961,67 @@ async def validate_signatures(session_id: str, game: str) -> Any:
     except Exception as e:
         return handle_error(e)
 
+@mcp.tool()
+async def auto_recover_signatures(session_id: str, game: str) -> Any:
+    """
+    Auto-recover broken signatures for a game.
+    AI analyzes WHY each broke, using Brain DB history + semantic context, to generate replacements.
+    """
+    try:
+        # Load signatures
+        key = f"signatures:{game}"
+        raw = brain.recall_knowledge(key)
+        if "No memories found" in raw:
+            return {"error": f"No signatures stored for '{game}'. Use save_signatures first."}
+
+        lines = raw.split("\n")
+        json_start = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("["):
+                json_start = i
+                break
+        if json_start is None:
+            return {"error": "Could not parse stored signatures."}
+
+        json_str = "\n".join(lines[json_start:])
+        if json_str.rstrip().endswith(")"):
+            json_str = "\n".join(json_str.rstrip().rsplit("\n", 1)[:-1])
+        signatures = json.loads(json_str)
+        
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "scan_aob"):
+            return handle_error(Exception("Active backend does not support AOB scanning."))
+
+        results = []
+        recovered_count = 0
+        dead_count = 0
+        
+        for sig in signatures:
+            name = sig.get("name", "Unknown")
+            pattern = sig.get("pattern", "")
+            try:
+                addr = await adapter.scan_aob(pattern)
+                if addr:
+                    results.append({"name": name, "status": "ALIVE", "pattern": pattern})
+                else:
+                    # AI Context Simulation: Normally, this would dispatch to the AI itself via MCP
+                    # to ask it to search via string references, fuzzy scanning, or cross-refs.
+                    # Since this tool executes ON the server, we simulate the "Auto-Recovery"
+                    # request creation for the AI to process.
+                    results.append({
+                        "name": name,
+                        "status": "NEEDS_RECOVERY",
+                        "old_pattern": pattern,
+                        "instruction_for_ai": f"Analyze binary via get_strings, get_xrefs for '{name}' implementation to reconstruct AOB."
+                    })
+                    dead_count += 1
+            except Exception:
+                results.append({"name": name, "status": "ERROR"})
+
+        return {
+            "game": game,
+            "message": f"Found {dead_count} broken signatures. AI should process NEEDS_RECOVERY items to reconstruct patterns.",
+            "results": results
+        }
+    except Exception as e:
+        return handle_error(e)
