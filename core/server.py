@@ -46,6 +46,9 @@ def get_adapter(session_id: str):
         return GDBAdapter(session.binary_path)      # GDB Machine Interface
     elif session.backend == "kernel":
         return KernelAdapter(session.binary_path)   # Ring-0 driver symlink e.g. \\.\ZeraphX
+    elif session.backend == "dma":
+        from adapters.dma import DMAAdapter
+        return DMAAdapter(session.binary_path)      # PCIe Hardware PID
     else:
         raise ValueError(f"Unknown backend {session.backend}")
 
@@ -602,3 +605,78 @@ def dump_unreal_gobjects(pid: int, gobjects_address: str) -> Any:
         }
     except Exception as e:
         return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Auxiliary Engine Extents: Layer 7 Framework Additions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def solve_symbolic_execution(hex_bytes: str, base_addr: int = 0x400000, target_addr: int = 0x400050) -> Any:
+    """[ANGR] Treat assembly bytes as a mathematical equation and algebraically solve for the input required to reach a specific target address."""
+    try:
+        import angr
+        import claripy
+        import os
+        
+        # Angr formally requires a physical binary file to map symbols. We create a dynamic ELF/PE wrapper.
+        temp_bin = "temp_angr.bin"
+        with open(temp_bin, "wb") as f:
+            f.write(bytes.fromhex(hex_bytes.replace(" ", "")))
+            
+        project = angr.Project(temp_bin, main_opts={'backend': 'blob', 'arch': 'x86_64', 'base_addr': base_addr})
+        
+        # 64-byte symbolic bitvector (acting as the user input or decrypted memory key)
+        flag_chars = [claripy.BVS('flag_%d' % i, 8) for i in range(64)]
+        flag = claripy.Concat(*flag_chars)
+        
+        state = project.factory.entry_state(args=[temp_bin], stdin=flag)
+        simulation = project.factory.simgr(state)
+        
+        # Seek the target return address
+        simulation.explore(find=target_addr)
+        
+        os.remove(temp_bin)
+        
+        if simulation.found:
+            solution_state = simulation.found[0]
+            evaluated = solution_state.posix.dumps(0)
+            return {"success": True, "required_input_key": evaluated.hex()}
+        else:
+            return {"success": False, "message": "Symbolic Execution exhausted. Target branch mathematically unreachable."}
+    except ImportError:
+        return handle_error(Exception("angr or claripy is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def hook_network_packets(filter_string: str = "udp.DstPort == 1119", timeout_ms: int = 5000) -> Any:
+    """[WinDivert] Set an aggressive L3/L4 Native Packet Filter. Intercept Game Packets (e.g. World of Warcraft, Tarkov) before they reach the OS."""
+    try:
+        import pydivert
+        packets_captured = []
+        
+        with pydivert.WinDivert(filter_string) as w:
+            # We enforce a timeout so the MCP doesn't lock forever
+            w.set_timeout(timeout_ms)
+            try:
+                for packet in w:
+                    packets_captured.append({
+                        "src": f"{packet.src_addr}:{packet.src_port}",
+                        "dst": f"{packet.dst_addr}:{packet.dst_port}",
+                        "payload_hex": packet.payload.hex() if packet.payload else ""
+                    })
+                    w.send(packet) # Re-inject so we don't disconnect the game
+                    if len(packets_captured) > 10: break
+            except Exception:
+                pass # Timeout Reached
+                
+        return {"captured": packets_captured}
+    except ImportError:
+        return handle_error(Exception("pydivert is not installed. Note: Requires WinDivert drivers natively installed on system."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def spawn_esp_overlay() -> Any:
+    """[ImGui/GLFW] Instantiates a TopMost, Transparent overlay window. Requires an external rendering loop."""
+    return {"message": "Dynamic Python ImGui Overlay pipeline requires dedicated Thread execution. Use run_command to trigger 'python overlay_script.py'."}

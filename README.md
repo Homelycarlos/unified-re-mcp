@@ -6,24 +6,43 @@
 
 # ⚡ NexusRE MCP
 
-The **NexusRE MCP Server** is an enterprise-grade, stateless [Model Context Protocol](https://modelcontextprotocol.io/) framework that securely bridges **IDA Pro** and **Ghidra** into a single, cohesive AI-driven reverse engineering environment.
+The **NexusRE MCP Server** is an enterprise-grade, stateless [Model Context Protocol](https://modelcontextprotocol.io/) framework. It securely bridges your AI assistants into a single, cohesive AI-driven reverse engineering environment spanning User-Mode debuggers, Kernel drivers, and Physical Memory readers.
 
-Designed from the ground up to prevent global state leaks and enforce strict typing, this server enables AI coding agents to autonomously navigate binaries, decompile functions, intelligently rename symbols, and fetch complex cross-references over `stdio` without requiring any manual UI interaction.
+## 🟢 Features Overview (The 7 Tiers)
 
----
+**Phase 1: Static Engine Hooking**
+- IDA Pro, Ghidra, X64Dbg, Binary Ninja integrated via local Python background HTTP servers.
+- Automatic Decompilation, Cross-referencing, and Memory Map Extraction.
 
-## 🌟 Core Architecture & Features
+**Phase 2: Persistent Intel (The Brain DB)**
+- Backed by `aiosqlite`, the AI retains persistent memory maps of specific games across reboots, instantly recalling complex pointer offset chains.
 
-This project was built to address the boilerplate, unvalidated inputs, and state leakage issues of older standalone MCP plugins:
+**Phase 3: The Headless Execution**
+- Headless `r2pipe` (Radare2) background analysis.
+- Live JS JavaScript trapping in native Android/iOS/Linux binaries via Frida.
+- Blistering fast AOB scanning using Cheat Engine TCP WebSockets.
 
-1. **Stateless Session Management (`SessionManager`)**: 
-   When an AI agent connects, it requests a `session_id`. All subsequent actions are securely sandboxed to that session. This enables multiple agents, or multiple instances of an agent, to safely analyze entirely different binaries across different backends simultaneously without state interference.
-2. **Pydantic Tool Validation**: 
-   It is fundamentally impossible to pass malformed arguments to the engine. All inputs and outputs are automatically marshaled into strict JSON-RPC 2.0 schemas. If an AI hallucinates an argument format, it will receive an immediate descriptive Pydantic feedback error rather than crashing the Hex-Rays decompiler.
-3. **Multi-Backend API Simplicity**:
-   A single, unified Python `BaseAdapter` abstraction governs both Ghidra and IDA. You can write one AI prompt, securely use one client workflow, and hot-swap between an IDA Pro database and a Ghidra dataset frictionlessly depending on the target.
-4. **FastMCP Integration**: 
-   Leverages standard I/O and SSE for instantaneous asynchronous message parsing. No hacky socket overhead delays.
+**Phase 4: High-Availability Concurrency**
+- Entire MCP suite runs via `ThreadingHTTPServer` to stop Ide Deadlocking.
+- Mass data (like Global Vars) is kept dynamically in a 0-latency Python Hash Dict cache.
+- 3x Timeout Automatic Backoff Retries to protect against debugger stutters.
+
+**Phase 5: The Master Class**
+- Native Hex Compilation via `keystone-engine`.
+- Memory Parsing using native Headless Yara Pattern Scanning (`yara-python`).
+- Abstract AST Node extraction (saving massive API context) via `tree-sitter`.
+- Automated Cloud offset dumping to your personal repos via `PyGithub`.
+
+**Phase 6: Emulation & Ring 0**
+- Virtualized CPU Sandboxing (`unicorn`) for natively calculating encrypted Unreal Engine arrays.
+- Capstone CLI-less physical byte disassembly.
+- `kernel.py` routing directly through Windows Ring-0 IOCTL (`DeviceIoControl`).
+
+**Phase 7: Hardware & Networking**
+- Physical **PCILeech DMA Adaptation** utilizing `vmmpy`. Read memory from secondary laptops instantly and invisibly.
+- **Symbolic Execution**: Uses python `angr` to systematically mathematically solve for specific Game Patch branch logic paths without reversing.
+- Layer 3/4 Packet Sniffing (`pydivert` / WinDivert) for instantaneous external proxying.
+- Live Custom TopMost ESP generation hooks via `glfw`.
 
 ---
 

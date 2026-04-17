@@ -14,3 +14,7 @@ PyGithub
 capstone
 unicorn
 pywin32
+vmmpy
+angr
+pydivert
+glfw
