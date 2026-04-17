@@ -11,6 +11,7 @@ from adapters.r2 import Radare2Adapter
 from adapters.frida import FridaAdapter
 from adapters.ce import CheatEngineAdapter
 from adapters.gdb import GDBAdapter
+from adapters.kernel import KernelAdapter
 from schemas.models import (
     FunctionSchema, StringSchema, XrefSchema,
     InstructionSchema, CommentSchema, GlobalVarSchema,
@@ -43,6 +44,8 @@ def get_adapter(session_id: str):
         return CheatEngineAdapter()                 # Hardcodes default TCP out to 127.0.0.1:10105
     elif session.backend == "gdb":
         return GDBAdapter(session.binary_path)      # GDB Machine Interface
+    elif session.backend == "kernel":
+        return KernelAdapter(session.binary_path)   # Ring-0 driver symlink e.g. \\.\ZeraphX
     else:
         raise ValueError(f"Unknown backend {session.backend}")
 
@@ -472,5 +475,130 @@ def sync_offsets_to_github(repo_name: str, github_token: str, offsets: dict, fil
             return {"success": True, "message": "Created new offsets file."}
     except ImportError:
         return handle_error(Exception("PyGithub is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def disassemble_bytes(hex_bytes: str, arch: str = "x86", mode: str = "64", address: int = 0x1000) -> Any:
+    """Headless Disassembler using Capstone. Converts hex bytes (e.g. '90 90') into x86/ARM instructions."""
+    try:
+        from capstone import Cs, CS_ARCH_X86, CS_ARCH_ARM, CS_MODE_32, CS_MODE_64, CS_MODE_ARM
+        
+        arch_map = {"x86": CS_ARCH_X86, "arm": CS_ARCH_ARM}
+        mode_map = {"32": CS_MODE_32, "64": CS_MODE_64, "arm": CS_MODE_ARM}
+        
+        cs_arch = arch_map.get(arch.lower())
+        cs_mode = mode_map.get(mode.lower())
+        
+        if cs_arch is None or cs_mode is None:
+            return {"error": "Invalid architecture or mode."}
+            
+        md = Cs(cs_arch, cs_mode)
+        raw_bytes = bytes.fromhex(hex_bytes.replace(" ", ""))
+        
+        instructions = []
+        for i in md.disasm(raw_bytes, address):
+            instructions.append({
+                "address": hex(i.address),
+                "mnemonic": i.mnemonic,
+                "operands": i.op_str
+            })
+        return {"instructions": instructions}
+    except ImportError:
+        return handle_error(Exception("capstone is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def emulate_subroutine(hex_bytes: str, arch: str = "x86", mode: str = "64", init_registers: dict = None) -> Any:
+    """Virtual Sandbox CPU using Unicorn Engine. Executes raw hex instructions and returns final register states. Useful for bypassing Encrypted Pointers!"""
+    try:
+        from unicorn import Uc, UC_ARCH_X86, UC_ARCH_ARM, UC_MODE_32, UC_MODE_64, UC_MODE_ARM
+        from unicorn.x86_const import UC_X86_REG_RAX, UC_X86_REG_RBX, UC_X86_REG_RCX, UC_X86_REG_RDX, UC_X86_REG_RSP
+        
+        arch_map = {"x86": UC_ARCH_X86, "arm": UC_ARCH_ARM}
+        mode_map = {"32": UC_MODE_32, "64": UC_MODE_64, "arm": UC_MODE_ARM}
+        
+        uc_arch = arch_map.get(arch.lower())
+        uc_mode = mode_map.get(mode.lower())
+        
+        if uc_arch is None or uc_mode is None:
+            return {"error": "Invalid architecture or mode."}
+            
+        ADDRESS = 0x1000000
+        raw_bytes = bytes.fromhex(hex_bytes.replace(" ", ""))
+        
+        # Initialize emulator in X86-64bit mode
+        mu = Uc(uc_arch, uc_mode)
+        
+        # Structure Memory (2MB)
+        mu.mem_map(ADDRESS, 2 * 1024 * 1024)
+        mu.mem_write(ADDRESS, raw_bytes)
+        
+        # Set specific starting register logic
+        if init_registers:
+            reg_map = {
+                "rax": UC_X86_REG_RAX, "rbx": UC_X86_REG_RBX, 
+                "rcx": UC_X86_REG_RCX, "rdx": UC_X86_REG_RDX,
+                "rsp": UC_X86_REG_RSP
+            }
+            # Hardcoded mapping for MVP
+            for key, val in init_registers.items():
+                if key.lower() in reg_map:
+                    mu.reg_write(reg_map[key.lower()], int(val, 16) if isinstance(val, str) else val)
+                    
+        # Emulate
+        mu.emu_start(ADDRESS, ADDRESS + len(raw_bytes))
+        
+        # Scrape final values
+        out_registers = {
+            "rax": hex(mu.reg_read(UC_X86_REG_RAX)),
+            "rbx": hex(mu.reg_read(UC_X86_REG_RBX)),
+            "rcx": hex(mu.reg_read(UC_X86_REG_RCX)),
+            "rdx": hex(mu.reg_read(UC_X86_REG_RDX)),
+        }
+        return {"registers": out_registers}
+    except ImportError:
+        return handle_error(Exception("unicorn is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Auxiliary Engine Extents: Unreal Engine Native
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def dump_unreal_gnames(pid: int, gnames_address: str) -> Any:
+    """[UE4/5 Only] Decrypt and dump the global string array (GNames) directly from game memory using Pymem."""
+    try:
+        import pymem
+        pm = pymem.Pymem(pid)
+        base = int(gnames_address, 16)
+        
+        # Simplified FNamePool read structure mapping
+        # Actual structure depends heavily on UE 4.22 vs UE 5.0+
+        # This acts as the MCP template for the AI to dynamically edit struct parameters
+        chunk_table = pm.read_ulonglong(base + 0x10)
+        return {"success": True, "message": f"Successfully hooked GNames pool at chunk table {hex(chunk_table)}. Implement struct parser loop here."}
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def dump_unreal_gobjects(pid: int, gobjects_address: str) -> Any:
+    """[UE4/5 Only] Dump the global UObject array (GUObjectArray) to map the game's actual actor/player structures."""
+    try:
+        import pymem
+        pm = pymem.Pymem(pid)
+        base = int(gobjects_address, 16)
+        
+        objects_count = pm.read_int(base + 0x14) # NumElements
+        obj_array = pm.read_ulonglong(base + 0x10) # ObjObjects pointer
+        
+        return {
+            "success": True, 
+            "total_objects": objects_count,
+            "array_base": hex(obj_array),
+            "message": "AI can now iterate over the array base using read_pointer_chain tool to build the SDK."
+        }
     except Exception as e:
         return handle_error(e)

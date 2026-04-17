@@ -11,3 +11,6 @@ tree-sitter
 tree-sitter-c
 yara-python
 PyGithub
+capstone
+unicorn
+pywin32
