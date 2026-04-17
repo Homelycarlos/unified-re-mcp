@@ -6,6 +6,7 @@ from .session import SessionManager
 from adapters.ida import IDAAdapter
 from adapters.ghidra import GhidraAdapter
 from adapters.x64dbg import X64DbgAdapter
+from adapters.binja import BinjaAdapter
 from schemas.models import (
     FunctionSchema, StringSchema, XrefSchema,
     InstructionSchema, CommentSchema, GlobalVarSchema,
@@ -28,6 +29,8 @@ def get_adapter(session_id: str):
         return GhidraAdapter(session.backend_url)
     elif session.backend == "x64dbg":
         return X64DbgAdapter(session.backend_url)
+    elif session.backend == "binja":
+        return BinjaAdapter(session.backend_url)
     else:
         raise ValueError(f"Unknown backend {session.backend}")
 

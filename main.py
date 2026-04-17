@@ -172,6 +172,7 @@ Supported Backends:
   - ida (Default port: 10101)
   - ghidra (Default port: 10102)
   - x64dbg (Default port: 10103)
+  - binja (Default port: 10104)
 """)
     sys.exit(0)
 
