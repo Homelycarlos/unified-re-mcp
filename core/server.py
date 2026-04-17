@@ -10,6 +10,7 @@ from adapters.binja import BinjaAdapter
 from adapters.r2 import Radare2Adapter
 from adapters.frida import FridaAdapter
 from adapters.ce import CheatEngineAdapter
+from adapters.gdb import GDBAdapter
 from schemas.models import (
     FunctionSchema, StringSchema, XrefSchema,
     InstructionSchema, CommentSchema, GlobalVarSchema,
@@ -40,6 +41,8 @@ def get_adapter(session_id: str):
         return FridaAdapter(session.binary_path)    # Frida uses binary_path to store the PID or process name
     elif session.backend == "cheatengine":
         return CheatEngineAdapter()                 # Hardcodes default TCP out to 127.0.0.1:10105
+    elif session.backend == "gdb":
+        return GDBAdapter(session.binary_path)      # GDB Machine Interface
     else:
         raise ValueError(f"Unknown backend {session.backend}")
 
@@ -357,5 +360,117 @@ async def read_pointer_chain(session_id: str, base_address: str, offsets: List[s
         return {"address": res} if res else {"error": "Invalid Pointer Chain."}
     except AttributeError:
         return handle_error(Exception("The selected backend does not support raw pointer reading."))
+    except Exception as e:
+        return handle_error(e)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Utility / Master Class Framework Tools
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def compile_shellcode(assembly_text: str, arch: str = "x86", mode: str = "64") -> Any:
+    """Compile raw assembly text (e.g. 'mov rax, 1') into executable hex shellcode bytes using Keystone Engine."""
+    try:
+        from keystone import Ks, KS_ARCH_X86, KS_ARCH_ARM, KS_MODE_32, KS_MODE_64, KS_MODE_ARM
+        
+        arch_map = {"x86": KS_ARCH_X86, "arm": KS_ARCH_ARM}
+        mode_map = {"32": KS_MODE_32, "64": KS_MODE_64, "arm": KS_MODE_ARM}
+        
+        ks_arch = arch_map.get(arch.lower())
+        ks_mode = mode_map.get(mode.lower())
+        
+        if ks_arch is None or ks_mode is None:
+            return {"error": f"Invalid architecture or mode. Supported: arch(x86/arm), mode(32/64/arm)"}
+            
+        ks = Ks(ks_arch, ks_mode)
+        encoding, count = ks.asm(assembly_text)
+        
+        if not encoding:
+            return {"error": "Failed to compile assembly text."}
+            
+        hex_bytes = " ".join([f"{b:02x}" for b in encoding])
+        return {"hex_bytes": hex_bytes, "instruction_count": count}
+    except ImportError:
+        return handle_error(Exception("keystone-engine is not installed. Please run: pip install keystone-engine"))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def extract_ast_segments(c_code: str, query_type: str = "if_statement") -> Any:
+    """Parse a large C/C++ decompiled code block and return ONLY the segments matching the AST query type (e.g. 'if_statement', 'for_statement')."""
+    try:
+        from tree_sitter import Language, Parser
+        import tree_sitter_c as tsc
+        
+        C_LANGUAGE = Language(tsc.language())
+        parser = Parser(C_LANGUAGE)
+        
+        tree = parser.parse(bytes(c_code, "utf8"))
+        root_node = tree.root_node
+        
+        results = []
+        def traverse(node):
+            if node.type == query_type:
+                results.append(c_code[node.start_byte:node.end_byte])
+            for child in node.children:
+                traverse(child)
+                
+        traverse(root_node)
+        return {"segments": results} if results else {"message": f"No '{query_type}' found."}
+    except ImportError:
+        return handle_error(Exception("tree-sitter or tree-sitter-c is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def yara_memory_scan(pid: int, yara_rule: str) -> Any:
+    """Perform a live YARA memory scan against a target process PID. Useful for bypassing Anti-Cheats or mapping generic payloads."""
+    try:
+        import yara
+        import pymem
+        
+        rules = yara.compile(source=yara_rule)
+        pm = pymem.Pymem(pid)
+        matches_found = []
+        
+        for region in pm.memory_regions():
+            try:
+                # Read physical memory region
+                data = pm.read_bytes(region.BaseAddress, region.RegionSize)
+                matches = rules.match(data=data)
+                for match in matches:
+                    for offset, string_identifier, string_data in match.strings:
+                        matches_found.append({
+                            "rule": match.rule,
+                            "address": hex(region.BaseAddress + offset),
+                            "string_matched": string_identifier
+                        })
+            except Exception:
+                continue # Skip inaccessible pages (PAGE_GUARD etc.)
+                
+        return {"matches": matches_found}
+    except ImportError:
+        return handle_error(Exception("yara-python or pymem is not installed."))
+    except Exception as e:
+        return handle_error(e)
+
+@mcp.tool()
+def sync_offsets_to_github(repo_name: str, github_token: str, offsets: dict, file_path: str = "offsets.json") -> Any:
+    """Automatically commit offset dictionaries to a GitHub repository directly from the MCP Server."""
+    try:
+        from github import Github
+        g = Github(github_token)
+        repo = g.get_repo(repo_name)
+        
+        content = json.dumps(offsets, indent=4)
+        try:
+            file = repo.get_contents(file_path)
+            repo.update_file(file.path, "ci(bot): Auto-Sync Offsets via AI", content, file.sha)
+            return {"success": True, "message": "Overrides updated existing file."}
+        except:
+            repo.create_file(file_path, "ci(bot): Auto-Sync Offsets via AI", content)
+            return {"success": True, "message": "Created new offsets file."}
+    except ImportError:
+        return handle_error(Exception("PyGithub is not installed."))
     except Exception as e:
         return handle_error(e)

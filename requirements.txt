@@ -5,3 +5,9 @@ frida>=16.0.0
 r2pipe>=1.9.0
 pymem>=1.13.0
 aiosqlite>=0.20.0
+keystone-engine
+pygdbmi
+tree-sitter
+tree-sitter-c
+yara-python
+PyGithub
