@@ -167,6 +167,11 @@ Usage:
   uv run main.py --transport sse Start the server with SSE transport (HTTP)
   uv run main.py --port 8080     Set the SSE server port (default: 8080)
   uv run main.py --help          Show this help message
+
+Supported Backends:
+  - ida (Default port: 10101)
+  - ghidra (Default port: 10102)
+  - x64dbg (Default port: 10103)
 """)
     sys.exit(0)
 
