@@ -87,11 +87,25 @@ _*Note: The `kernel` adapter is an empty template. You must add your own custom 
 * **Stealth Kernel YARA Scanning**: The `yara_memory_scan` tool now natively supports the Kernel adapter. Once you bind your own driver to the `KernelAdapter`, `yara_memory_scan` will route all physical memory reads through Ring-0, entirely avoiding `VirtualQueryEx` bans from BattlEye/EAC.
 * **Unity IL2CPP Dumper**: Added `dump_il2cpp_domain` alongside the native Unreal Engine structure dumpers.
 
-## 🛠 Usage in Cursor IDE
-1. Open Cursor Settings -> Features -> MCP Servers
-2. Add new server: `nexusre`
-3. Command: `uv run main.py`
-4. Open the AI pane and tell Cursor: *"Initialize an x64dbg session and scan for this player health AOB."*
+## 🛠 Client & Debugger Installation Guide
+
+### 1. Connecting to your AI (Claude / Cursor)
+* **Cursor**: 
+   - Navigate to `Settings -> Features -> MCP Servers`
+   - Add new server named `NexusRE`
+   - Set the command to: `uv run main.py` (or whatever executes your local python entrypoint).
+* **Claude Desktop**:
+   - Open your `claude_desktop_config.json`
+   - Add the NexusRE server node mapping to your local repository.
+* Once linked, simply tell your AI: *"Initialize an IDA session and use `wait_for_breakpoint` on this offset."*
+
+### 2. Connecting the IDA Pro Plugin
+For NexusRE to natively control IDA Pro (and its debugger), you must install the backend plugin into IDA:
+1. Locate the plugin file inside this repository at: `plugins/ida/ida_backend_plugin.py`
+2. Copy the file and paste it into your IDA Pro plugins directory:
+   - Typical path: `%APPDATA%\Hex-Rays\IDA Pro\plugins\`
+   - Fallback path: `C:\Program Files\IDA Professional\plugins\`
+3. Restart IDA Pro. The plugin is configured with `idaapi.PLUGIN_FIX`, meaning it will automatically start the background connection listener every time you open a database!
 
 <div align="center">
 <i>Built for the modern reverse engineer.</i>
