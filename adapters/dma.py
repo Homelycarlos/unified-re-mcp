@@ -1,5 +1,4 @@
-import asyncio
-from typing import List, Optional
+from typing import List, Optional, Any
 from .base import BaseAdapter
 from schemas.models import (
     FunctionSchema, StringSchema, XrefSchema,
@@ -10,54 +9,68 @@ import logging
 
 logger = logging.getLogger("NexusRE")
 
-class DMAAdapter(BaseAdapter):
+class DmaAdapter(BaseAdapter):
     """
-    Adapter bridging MCP to physical PCIe DMA Devices (PCILeech / Raptor).
-    This establishes external, hardware-based memory tracking that is invisible to ring-0 AC.
-    Requires MemProcFS API (vmm or similar physical memory mapping wrappers).
+    Adapter bridging MCP to PCILeech / MemProcFS hardware DMA FPGAs.
+    Allows 100% undetected physical memory reading via 2nd PC without OS-level process handlers.
+    Requires vmmpy (MemProcFS python wrapper) and native Win32 binaries.
     """
-    def __init__(self, target_pid: str):
-        self.pid = int(target_pid) if target_pid.isdigit() else 0
+    def __init__(self, target_process: str):
+        self.process_name = target_process
+        self.vmm = None
+        self.pid = 0
         try:
-            # Concept mapping leveraging standard MemProcFS python bindings
-            # vmmpy is typically private or compiled locally, so we map the theoretical structure
-            # To actually run, the DLLs (vmm.dll, leechcore.dll) must be in PATH.
-            from utils.memprocfs_shim import Vmm
-            self.vmm = Vmm(['-printf', '-device', 'fpga'])
-            self.process = self.vmm.process(self.pid)
-            logger.info(f"Successfully attached VMM DMA interface to Process: {self.pid}")
+            import vmmpy
+            # Initialize Physical FPGA
+            self.vmm = vmmpy.Vmm(["-printf", "-v", "-device", "FPGA"])
+            self.pid = self.vmm.pid_get_from_name(self.process_name)
+            if self.pid == 0:
+                logger.warning(f"[DMA] Could not find {self.process_name} on target machine.")
+            else:
+                logger.info(f"[DMA] Connected to {self.process_name} (PID: {self.pid}) via PCIe hardware.")
+        except ImportError:
+            logger.warning("[DMA] vmmpy not installed. Install memprocfs python bindings for hardware DMA.")
         except Exception as e:
-            logger.error(f"Failed to attach DMA Hardware Adapter: {e}")
-            self.vmm = None
-            self.process = None
+            logger.error(f"[DMA] FPGA Initialization failed: {e}")
 
-    async def get_current_address(self) -> Optional[str]:
-        return None
-
-    async def disassemble_at(self, address: str) -> List[InstructionSchema]:
-        """Can map to Capstone via physical DMA Read."""
-        return []
-
-    async def get_current_function(self) -> Optional[str]:
-        return None
-
-    async def patch_bytes(self, address: str, hex_bytes: str) -> bool:
-        """Issue an external DMA scatter write over PCIe."""
-        if not self.process: return False
-        addr = int(address, 16)
-        b_list = bytes.fromhex(hex_bytes.replace(" ", ""))
+    async def read_memory(self, address: int, size: int, as_bytes: bool = False) -> Any:
+        """Physical DMA read via PCILeech scatter/gather buffers."""
+        if not self.vmm or self.pid == 0:
+            raise Exception("DMA FPGA not initialized or Target Process not running.")
         try:
-            self.process.memory.write(addr, b_list)
-            return True
+            # VMM_MEM_FLAG_NORMAL by default
+            data = self.vmm.mem_read(self.pid, address, size)
+            if as_bytes:
+                return data
+            return data.hex()
         except Exception as e:
-            logger.error(f"DMA Write Error: {e}")
-            return False
+            raise Exception(f"DMA Memory Read Failed: {e}")
+
+    async def memory_regions(self) -> List[dict]:
+        """Fetch VAD (Virtual Address Descriptors) mapped dynamically over PCIe."""
+        if not self.vmm or self.pid == 0:
+            raise Exception("DMA FPGA not initialized or Target Process not running.")
+        regions = []
+        try:
+            for map in self.vmm.map_vad(self.pid):
+                regions.append({
+                    "BaseAddress": map.vaStart,
+                    "RegionSize": map.vaEnd - map.vaStart,
+                    "Protect": map.protection,
+                    "IsPhysical": True
+                })
+        except Exception:
+            pass
+        return regions
 
     # ── Stubbed Overrides 
 
+    async def get_current_address(self) -> Optional[str]: return None
+    async def get_current_function(self) -> Optional[str]: return None
     async def list_functions(self, offset: int = 0, limit: int = 100, filter_str: Optional[str] = None) -> List[FunctionSchema]: return []
     async def get_function(self, address: str) -> Optional[FunctionSchema]: return None
     async def decompile_function(self, address: str) -> Optional[str]: return None
+    async def disassemble_at(self, address: str) -> List[InstructionSchema]: return []
     async def analyze_functions(self, addresses: List[str]) -> bool: return False
     async def get_xrefs(self, address: str) -> List[XrefSchema]: return []
     async def get_strings(self, offset: int = 0, limit: int = 100, filter_str: Optional[str] = None) -> List[StringSchema]: return []
@@ -70,4 +83,5 @@ class DMAAdapter(BaseAdapter):
     async def set_function_type(self, address: str, signature: str) -> bool: return False
     async def rename_local_variable(self, address: str, old_name: str, new_name: str) -> bool: return False
     async def set_local_variable_type(self, address: str, variable_name: str, new_type: str) -> bool: return False
+    async def patch_bytes(self, address: str, hex_bytes: str) -> bool: return False
     async def save_binary(self, output_path: str) -> bool: return False

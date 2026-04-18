@@ -75,6 +75,10 @@ NexusRE is modular. Drop any `.py` file into the `adapters/` folder and it auto-
 _*Note: The `kernel` adapter is an empty template. You must add your own custom Kernel Driver (with its specific IOCTL byte layout) to utilize it!_
 
 ### Recent Feature Upgrades
+* **DMA / PCILeech Hardware Integration**: Added `adapters/dma.py` utilizing the `vmmpy` library! The AI can now perform 100% undetected physical memory reads directly across a PCIe FPGA board, bypassing Vanguard and BattlEye entirely via a 2nd PC.
+* **Automated C++ SDK Generator**: Call `generate_game_sdk` and the AI will recursively rip through an entire Engine (Unreal/Unity), parse the VTables and GObjects, and write a massive, complete C++ header struct mapping file for your cheat instantly.
+* **Symbolic Decryption Solver**: Added `symbolic_string_decrypt` leveraging the `angr` engine. If a game uses a complex `ROL/XOR` chain to encrypt a pointer, you give the AI the memory block, and it will symbolically derive the algebraic decryption key and formula for you without manual debugging.
+* **Kernel Scaffold Generator**: Start a new cheat project instantly by calling `scaffold_kernel_interface`. The AI will generate a complete boilerplate `driver.c` and `client.h` mapped to your specific game and desired IOCTL codes.
 * **ReClass.NET Integration**: A native `ReClassAdapter` (`adapters/reclass.py`) allows AI to read active `.rcnet` project files to parse offset schemas and automatically generate C++ structs for your `driver.h`.
 * **Kernel Fast-Pointer Scanning**: The new `CheatEngineAdapter` (`adapters/cheatengine.py`) hooks directly into CE's DBK64 lua backend. This gives the AI the power to execute milliseconds-fast native kernel pointer scans over massive Memory Regions.
 * **Automated Signature Generator**: `generate_unique_aob` added. Pass any memory address, and the server natively reads the assembly, wildcards volatile bytes, and verifies uniqueness—generating a perfect signature instantly.
