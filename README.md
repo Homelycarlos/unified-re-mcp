@@ -68,8 +68,16 @@ NexusRE is modular. Drop any `.py` file into the `adapters/` folder and it auto-
 | **Ghidra** | Static | Headless analysis, Symbol resolution |
 | **x64dbg** | Dynamic | Live instruction patching, Register reading |
 | **Cheat Engine** | Dynamic | Multi-level pointer chasing, Lua environments |
-| **Frida** | Dynamic | JavaScript instruction trapping and hooking |
+| **Frida** | Dynamic | JavaScript instruction trapping, Live Breakpoints |
+| **Kernel** | Ring-0 | Bypass user-mode AntiCheats via IOCTL (BYOD - Bring Your Own Driver)* |
 | **DMA / PCILeech**| Hardware | 100% undetected memory read/writes |
+
+_*Note: The `kernel` adapter is an empty template. You must add your own custom Kernel Driver (with its specific IOCTL byte layout) to utilize it!_
+
+### Recent Feature Upgrades
+* **Dynamic Breakpoints**: Through the Frida adapter, AI can now programmatically set `set_hardware_breakpoint` and `wait_for_breakpoint` to halt game execution and dump live CPU registers instantly.
+* **Stealth Kernel YARA Scanning**: The `yara_memory_scan` tool now natively supports the Kernel adapter. Once you bind your own driver to the `KernelAdapter`, `yara_memory_scan` will route all physical memory reads through Ring-0, entirely avoiding `VirtualQueryEx` bans from BattlEye/EAC.
+* **Unity IL2CPP Dumper**: Added `dump_il2cpp_domain` alongside the native Unreal Engine structure dumpers.
 
 ## 🛠 Usage in Cursor IDE
 1. Open Cursor Settings -> Features -> MCP Servers
