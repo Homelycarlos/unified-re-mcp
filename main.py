@@ -241,9 +241,9 @@ def install_plugins():
 def setup_wizard():
     """One-command setup: detect tools, install plugins, inject MCP config."""
     print("")
-    print("╔══════════════════════════════════════════╗")
-    print("║     NEXUSRE-MCP SETUP WIZARD             ║")
-    print("╚══════════════════════════════════════════╝")
+    print("============================================")
+    print("|     NEXUSRE-MCP SETUP WIZARD             |")
+    print("============================================")
     print("")
 
     # Step 1: Detect installed RE tools
@@ -261,10 +261,10 @@ def setup_wizard():
     for p in ida_paths:
         if os.path.exists(p):
             tools_found.append(("IDA Pro", p))
-            print(f"  ✅ IDA Pro found: {p}")
+            print(f"  [+] IDA Pro found: {p}")
             break
     else:
-        print("  ⬜ IDA Pro: not found")
+        print("  [-] IDA Pro: not found")
 
     # Ghidra
     ghidra_dir = os.environ.get("GHIDRA_INSTALL_DIR", "")
@@ -277,10 +277,10 @@ def setup_wizard():
     for p in ghidra_paths:
         if os.path.exists(p):
             tools_found.append(("Ghidra", p))
-            print(f"  ✅ Ghidra found: {p}")
+            print(f"  [+] Ghidra found: {p}")
             break
     else:
-        print("  ⬜ Ghidra: not found")
+        print("  [-] Ghidra: not found")
 
     # x64dbg
     x64dbg_paths = [
@@ -291,19 +291,19 @@ def setup_wizard():
     for p in x64dbg_paths:
         if os.path.exists(p):
             tools_found.append(("x64dbg", p))
-            print(f"  ✅ x64dbg found: {p}")
+            print(f"  [+] x64dbg found: {p}")
             break
     else:
-        print("  ⬜ x64dbg: not found")
+        print("  [-] x64dbg: not found")
 
     # Binary Ninja
     if appdata:
         binja_path = os.path.join(appdata, "Binary Ninja", "plugins")
         if os.path.exists(binja_path):
             tools_found.append(("Binary Ninja", binja_path))
-            print(f"  ✅ Binary Ninja found: {binja_path}")
+            print(f"  [+] Binary Ninja found: {binja_path}")
         else:
-            print("  ⬜ Binary Ninja: not found")
+            print("  [-] Binary Ninja: not found")
 
     print(f"\n  Found {len(tools_found)} tool(s).\n")
 
@@ -321,17 +321,17 @@ def setup_wizard():
     backends = detect_running_backends()
     if backends:
         for b in backends:
-            print(f"  🟢 {b['backend']} detected on port {b['port']}")
+            print(f"  [+] {b['backend']} detected on port {b['port']}")
     else:
-        print("  ⬜ No backends running. Start IDA/Ghidra and they'll auto-connect.")
+        print("  [-] No backends running. Start IDA/Ghidra and they'll auto-connect.")
 
     print("")
-    print("╔══════════════════════════════════════════╗")
-    print("║  ✅  SETUP COMPLETE!                     ║")
-    print("╠══════════════════════════════════════════╣")
-    print("║  Restart Claude/Cursor to activate.      ║")
-    print("║  Then ask: 'Run full_analysis'            ║")
-    print("╚══════════════════════════════════════════╝")
+    print("============================================")
+    print("|  [+] SETUP COMPLETE!                     |")
+    print("--------------------------------------------")
+    print("|  Restart Claude/Cursor to activate.      |")
+    print("|  Then ask: 'Run full_analysis'            |")
+    print("============================================")
     print("")
     sys.exit(0)
 
@@ -355,7 +355,7 @@ def install_plugins_silent():
             src = os.path.join(plugins_dir, "ida", "ida_backend_plugin.py")
             if os.path.exists(src):
                 shutil.copy2(src, os.path.join(target, "ida_backend_plugin.py"))
-                print(f"  ✅ IDA plugin → {target}")
+                print(f"  [+] IDA plugin -> {target}")
                 installed += 1
             break
 
@@ -366,7 +366,7 @@ def install_plugins_silent():
     src = os.path.join(plugins_dir, "ghidra", "ghidra_backend_plugin.py")
     if os.path.exists(src):
         shutil.copy2(src, os.path.join(ghidra_target, "ghidra_backend_plugin.py"))
-        print(f"  ✅ Ghidra plugin → {ghidra_target}")
+        print(f"  [+] Ghidra plugin -> {ghidra_target}")
         installed += 1
 
     print(f"  Installed {installed} plugin(s).")
@@ -399,57 +399,57 @@ def auto_install_silent():
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(existing, f, indent=2)
-        print(f"  ✅ {client_name} config updated")
+        print(f"  [+] {client_name} config updated")
         installed += 1
 
     if installed == 0:
-        print("  ⬜ No MCP clients found. Run --config for manual setup.")
+        print("  [-] No MCP clients found. Run --config for manual setup.")
 
 
 def quickstart():
     """Interactive quickstart guide."""
     print("""
-╔══════════════════════════════════════════════════════╗
-║          NEXUSRE-MCP QUICKSTART GUIDE                ║
-╚══════════════════════════════════════════════════════╝
+======================================================
+|          NEXUSRE-MCP QUICKSTART GUIDE              |
+======================================================
 
   Your first 5 minutes with NexusRE-MCP:
 
-  ┌─ STEP 1: CONNECT ─────────────────────────────────┐
-  │ Open your target binary in IDA Pro or Ghidra.     │
-  │ The backend plugin starts automatically on the    │
-  │ default port (IDA:10101, Ghidra:10102).            │
-  └───────────────────────────────────────────────────┘
+  -- STEP 1: CONNECT ---------------------------------
+  | Open your target binary in IDA Pro or Ghidra.     |
+  | The backend plugin starts automatically on the    |
+  | default port (IDA:10101, Ghidra:10102).           |
+  ----------------------------------------------------
 
-  ┌─ STEP 2: DETECT ──────────────────────────────────┐
-  │ Ask the AI:                                       │
-  │   "Detect my backends"                            │
-  │                                                   │
-  │ NexusRE auto-probes all ports and creates         │
-  │ sessions. Zero configuration needed.              │
-  └───────────────────────────────────────────────────┘
+  -- STEP 2: DETECT ----------------------------------
+  | Ask the AI:                                       |
+  |   "Detect my backends"                            |
+  |                                                   |
+  | NexusRE auto-probes all ports and creates         |
+  | sessions. Zero configuration needed.              |
+  ----------------------------------------------------
 
-  ┌─ STEP 3: ANALYZE ─────────────────────────────────┐
-  │ Ask the AI:                                       │
-  │   "Run full_analysis on the loaded binary"        │
-  │                                                   │
-  │ This decompiles 200 functions, auto-annotates     │
-  │ crypto/networking/anti-cheat patterns, and runs   │
-  │ a vulnerability scan. One command.                │
-  └───────────────────────────────────────────────────┘
+  -- STEP 3: ANALYZE ---------------------------------
+  | Ask the AI:                                       |
+  |   "Run full_analysis on the loaded binary"        |
+  |                                                   |
+  | This decompiles 200 functions, auto-annotates     |
+  | crypto/networking/anti-cheat patterns, and runs   |
+  | a vulnerability scan. One command.                |
+  ----------------------------------------------------
 
-  ┌─ STEP 4: HUNT ────────────────────────────────────┐
-  │ "Find functions similar to this decryption"       │
-  │ "Suggest names for the function at 0x140001234"   │
-  │ "Generate a YARA rule for this function"          │
-  │ "Show me the vulnerability report"                │
-  └───────────────────────────────────────────────────┘
+  -- STEP 4: HUNT ------------------------------------
+  | "Find functions similar to this decryption"       |
+  | "Suggest names for the function at 0x140001234"   |
+  | "Generate a YARA rule for this function"          |
+  | "Show me the vulnerability report"                |
+  ----------------------------------------------------
 
-  ┌─ STEP 5: EXPORT ──────────────────────────────────┐
-  │ "Export all symbols as an IDA script"             │
-  │ "Sync symbols from IDA to Ghidra"                 │
-  │ "Generate a Frida hook for this function"         │
-  └───────────────────────────────────────────────────┘
+  -- STEP 5: EXPORT ----------------------------------
+  | "Export all symbols as an IDA script"             |
+  | "Sync symbols from IDA to Ghidra"                 |
+  | "Generate a Frida hook for this function"         |
+  ----------------------------------------------------
 
 
   💡 Pro tip: Every rename you do teaches the AI.
@@ -467,8 +467,8 @@ NexusRE-MCP Server v4.0
 
 Usage:
   nexusre-mcp                       Start the MCP server (stdio transport)
-  nexusre-mcp setup                 🔧 One-command setup wizard
-  nexusre-mcp quickstart            🚀 Interactive quickstart guide
+  nexusre-mcp setup                 One-command setup wizard
+  nexusre-mcp quickstart            Interactive quickstart guide
   nexusre-mcp --config              Print JSON config for manual setup
   nexusre-mcp --install             Auto-inject config into Claude/Cursor
   nexusre-mcp --install-plugins     Auto-copy plugins to IDA/Ghidra/x64dbg
