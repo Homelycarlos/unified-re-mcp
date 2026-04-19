@@ -74,12 +74,36 @@ NexusRE connects to backend files in the `adapters/` folder. Right now, it suppo
 * **Network Sniffing:** Tell the AI to intercept packets going to the game server.
 * **Math Decryption:** If a game encrypts a memory address, the AI can automatically figure out the math formula to decrypt it for you. 
 
-## 🛠 Setting up the IDA Pro Plugin
+## 🛠 Setting up the Backend Plugins
 
-If you use IDA Pro, you need to add a quick plugin so they can talk:
-1. Find the `ida_backend_plugin.py` file in the `plugins/ida/` folder of this project.
-2. Copy it into your IDA Plugins folder (usually somewhere like `%APPDATA%\Hex-Rays\IDA Pro\plugins\`).
-3. Restart IDA. That's it!
+To let NexusRE talk to your specific tools, you need to run a small background plugin in them. Here is how to set up each one:
+
+### 🦇 IDA Pro
+1. Find the `ida_backend_plugin.py` file in the `plugins/ida/` folder.
+2. Copy it into your IDA Plugins directory (usually `%APPDATA%\Hex-Rays\IDA Pro\plugins\` or the `plugins` folder inside your IDA install directory).
+3. Restart IDA. The server will start automatically in the background.
+
+### 🐉 Ghidra
+1. Open Ghidra and navigate to your project.
+2. Open the **Script Manager** (`Window -> Script Manager`).
+3. Click the "Manage Script Directories" icon and add the `plugins/ghidra/` path, or simply create a new Python script and paste the contents of `ghidra_backend_plugin.py`.
+4. Run the script. Watch the console for *"Starting background HTTP server"*. *(Note: Requires PyGhidra).*
+
+### 🐞 x64dbg
+1. Install [x64dbgpy](https://github.com/x64dbg/x64dbgpy) to enable Python support.
+2. Open x64dbg and navigate to the Scripts tab.
+3. Execute the `plugins/x64dbg/x64dbg_backend_plugin.py` script to start the backend listener.
+
+### 🥷 Binary Ninja
+1. Open your Binary Ninja plugins folder by clicking `Edit -> Open Plugin Folder...`
+2. Copy the `plugins/binja/binja_backend_plugin.py` script into the plugins directory.
+3. Restart Binja. The server will automatically initialize in the background.
+
+### 💉 Cheat Engine
+1. Open Cheat Engine and attach to your target process.
+2. Press `Ctrl+Alt+L` to open the Lua Engine.
+3. Open or paste the contents of `plugins/ce/ce_backend_plugin.lua`.
+4. Click **Execute** to start the internal CE HTTP server.
 
 <div align="center">
 <i>Built to make game hacking human-readable.</i>
