@@ -451,8 +451,6 @@ def quickstart():
   │ "Generate a Frida hook for this function"         │
   └───────────────────────────────────────────────────┘
 
-  📊 Dashboard: Run `nexusre-mcp --dashboard` to open
-     the web UI at http://127.0.0.1:7777
 
   💡 Pro tip: Every rename you do teaches the AI.
      The more you use it, the smarter it gets.
@@ -460,23 +458,6 @@ def quickstart():
     sys.exit(0)
 
 
-def launch_dashboard():
-    """Launch the web dashboard and open it in the browser."""
-    from dashboard.server import start_dashboard
-    from core.session import SessionManager
-    sm = SessionManager()
-    start_dashboard(port=7777, session_manager=sm)
-    print("\n[*] Dashboard running at http://127.0.0.1:7777")
-    print("    Press Ctrl+C to stop.\n")
-    import webbrowser
-    webbrowser.open("http://127.0.0.1:7777")
-    try:
-        import time
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n[*] Dashboard stopped.")
-    sys.exit(0)
 
 
 def print_help():
@@ -488,7 +469,6 @@ Usage:
   nexusre-mcp                       Start the MCP server (stdio transport)
   nexusre-mcp setup                 🔧 One-command setup wizard
   nexusre-mcp quickstart            🚀 Interactive quickstart guide
-  nexusre-mcp --dashboard           📊 Launch web dashboard at :7777
   nexusre-mcp --config              Print JSON config for manual setup
   nexusre-mcp --install             Auto-inject config into Claude/Cursor
   nexusre-mcp --install-plugins     Auto-copy plugins to IDA/Ghidra/x64dbg
@@ -514,9 +494,6 @@ def main_cli():
 
     if "quickstart" in sys.argv:
         quickstart()
-
-    if "--dashboard" in sys.argv:
-        launch_dashboard()
 
     if "--config" in sys.argv:
         print_config()
