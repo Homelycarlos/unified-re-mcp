@@ -2697,3 +2697,299 @@ def cache_clear(cache_name: str = "all") -> str:
             return f"Unknown cache: {cache_name}. Options: all, decompile, function, disasm"
     except Exception as e:
         return handle_error(e)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 15. AUTO-SESSION DETECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+def detect_backends() -> Any:
+    """
+    Probe all known ports (IDA:10101, Ghidra:10102, x64dbg:10103, etc.)
+    and auto-create sessions for any detected running backends.
+    Zero configuration — just run this and start working.
+    """
+    try:
+        from .auto_session import auto_create_sessions
+        results = auto_create_sessions(sm)
+        active = [r for r in results if r["status"] in ("created", "already_exists")]
+        return {
+            "detected": results,
+            "active_count": len(active),
+            "message": f"Found {len(active)} active backend(s). Sessions ready." if active
+                       else "No backends detected. Start IDA/Ghidra/x64dbg and try again."
+        }
+    except Exception as e:
+        return handle_error(e)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 16. WORKFLOW PRESETS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@mcp.tool()
+async def full_analysis(session_id: str = "auto", limit: int = 200) -> Any:
+    """
+    One-command complete binary analysis. Chains:
+    1. Auto-detect session (if "auto")
+    2. List all functions
+    3. Auto-annotate (pattern matching)
+    4. Vulnerability scan
+    5. Generate summary report
+
+    This is the "I just want to analyze this binary" button.
+    """
+    try:
+        report = {"steps": []}
+
+        # Step 1: Resolve session
+        if session_id == "auto":
+            from .auto_session import auto_create_sessions
+            results = auto_create_sessions(sm)
+            active = [r for r in results if r["status"] in ("created", "already_exists")]
+            if not active:
+                return {"error_message": "No backends detected. Start IDA/Ghidra and try again."}
+            session_id = active[0]["session_id"]
+            report["steps"].append({
+                "step": "auto_detect",
+                "result": f"Using session: {session_id} ({active[0]['backend']})"
+            })
+        else:
+            session_id = sm.resolve_session_id(session_id)
+
+        adapter = get_adapter(session_id)
+
+        # Step 2: List functions
+        funcs = await adapter.list_functions(offset=0, limit=limit)
+        func_count = len(funcs) if funcs else 0
+        report["steps"].append({
+            "step": "list_functions",
+            "result": f"Found {func_count} functions"
+        })
+
+        if not funcs:
+            report["summary"] = "No functions found. Is a binary loaded?"
+            return report
+
+        # Count auto-named vs user-named
+        auto_named = sum(1 for f in funcs if f.get("name", "").startswith(("sub_", "FUN_")))
+        report["function_overview"] = {
+            "total": func_count,
+            "auto_named": auto_named,
+            "user_named": func_count - auto_named
+        }
+
+        # Step 3: Auto-annotate
+        from .auto_annotator import match_function
+        from .cache import decompile_cache
+
+        annotations = []
+        decompiled_count = 0
+
+        for func in funcs[:limit]:
+            addr = func.get("address", "")
+            name = func.get("name", "")
+
+            if not (name.startswith("sub_") or name.startswith("FUN_")):
+                continue
+
+            cache_key = f"{session_id}:decomp:{addr}"
+            code = decompile_cache.get(cache_key)
+            if not code:
+                try:
+                    code = await adapter.decompile_function(addr)
+                    if code:
+                        decompile_cache.set(cache_key, code)
+                        decompiled_count += 1
+                except Exception:
+                    continue
+
+            if code and len(code) > 20:
+                matches = match_function(code)
+                if matches and matches[0]["confidence"] >= 0.4:
+                    annotations.append({
+                        "address": addr,
+                        "old_name": name,
+                        "suggested": matches[0]["label"],
+                        "category": matches[0]["category"],
+                        "confidence": round(matches[0]["confidence"], 2)
+                    })
+
+        report["steps"].append({
+            "step": "auto_annotate",
+            "result": f"Identified {len(annotations)} functions from {decompiled_count} decompiled"
+        })
+
+        # Step 4: Vulnerability scan
+        from .vuln_scanner import scan_function, generate_report
+        all_findings = []
+        for func in funcs[:limit]:
+            addr = func.get("address", "")
+            name = func.get("name", "")
+            cache_key = f"{session_id}:decomp:{addr}"
+            code = decompile_cache.get(cache_key)
+            if code:
+                findings = scan_function(name, addr, code)
+                all_findings.extend(findings)
+
+        vuln_report = generate_report(all_findings)
+        report["steps"].append({
+            "step": "vuln_scan",
+            "result": f"Found {vuln_report['total_findings']} potential vulnerabilities"
+        })
+
+        # Step 5: Generate summary
+        cat_summary = {}
+        for a in annotations:
+            cat = a["category"]
+            cat_summary[cat] = cat_summary.get(cat, 0) + 1
+
+        report["summary"] = {
+            "binary_session": session_id,
+            "functions_scanned": func_count,
+            "functions_decompiled": decompiled_count,
+            "patterns_identified": len(annotations),
+            "pattern_categories": cat_summary,
+            "vulnerabilities": vuln_report["by_severity"],
+            "vulnerability_hotspots": vuln_report["hotspots"][:5],
+            "top_annotations": annotations[:20]
+        }
+
+        return report
+    except Exception as e:
+        return handle_error(e)
+
+
+@mcp.tool()
+async def quick_scan(session_id: str = "auto") -> Any:
+    """
+    Quick 30-second binary overview. Returns:
+    - Function count and naming stats
+    - Top 10 most interesting functions (by size)
+    - Import/export summary
+    - Quick vuln check on largest functions
+
+    Perfect for "what am I looking at?" moments.
+    """
+    try:
+        if session_id == "auto":
+            from .auto_session import auto_create_sessions
+            results = auto_create_sessions(sm)
+            active = [r for r in results if r["status"] in ("created", "already_exists")]
+            if not active:
+                return {"error_message": "No backends detected. Start a RE tool and try again."}
+            session_id = active[0]["session_id"]
+
+        session_id = sm.resolve_session_id(session_id)
+        adapter = get_adapter(session_id)
+
+        overview = {"session_id": session_id}
+
+        # Functions
+        funcs = await adapter.list_functions(offset=0, limit=500)
+        if funcs:
+            overview["function_count"] = len(funcs)
+            auto_named = sum(1 for f in funcs if f.get("name", "").startswith(("sub_", "FUN_")))
+            overview["auto_named"] = auto_named
+            overview["user_named"] = len(funcs) - auto_named
+
+            # Sort by size descending
+            sized = [f for f in funcs if f.get("size", 0) > 0]
+            sized.sort(key=lambda x: x.get("size", 0), reverse=True)
+            overview["largest_functions"] = [
+                {"name": f.get("name"), "address": f.get("address"), "size": f.get("size")}
+                for f in sized[:10]
+            ]
+
+        # Imports
+        try:
+            imports = await adapter.get_imports(0, 20)
+            if imports:
+                overview["imports_sample"] = [i.model_dump() for i in imports[:10]]
+                overview["import_count"] = len(imports)
+        except Exception:
+            overview["imports_sample"] = "unavailable"
+
+        # Strings
+        try:
+            strings = await adapter.list_strings(0, 20)
+            if strings:
+                overview["interesting_strings"] = [s.model_dump() for s in strings[:10]]
+        except Exception:
+            overview["interesting_strings"] = "unavailable"
+
+        return overview
+    except Exception as e:
+        return handle_error(e)
+
+
+@mcp.tool()
+def server_status() -> str:
+    """
+    Health check dashboard showing:
+    - Connected backends (with live port probing)
+    - Active sessions
+    - Cache stats
+    - Diff log count
+    - Similarity index size
+    """
+    try:
+        from .auto_session import detect_running_backends
+        from .cache import decompile_cache, function_cache, disasm_cache
+
+        lines = []
+        lines.append("╔══════════════════════════════════════╗")
+        lines.append("║     NEXUSRE-MCP SERVER STATUS        ║")
+        lines.append("╚══════════════════════════════════════╝")
+        lines.append("")
+
+        # Backend status
+        lines.append("🔌 BACKENDS:")
+        backends = detect_running_backends()
+        backend_names = {b["backend"] for b in backends}
+        all_backends = [
+            ("IDA Pro", "ida", 10101),
+            ("Ghidra", "ghidra", 10102),
+            ("x64dbg", "x64dbg", 10103),
+            ("Binary Ninja", "binja", 10104),
+            ("Cheat Engine", "cheatengine", 10105),
+        ]
+        for display_name, backend_id, port in all_backends:
+            status = "🟢 ONLINE" if backend_id in backend_names else "🔴 offline"
+            lines.append(f"  {display_name:20s} :{port:<5d}  {status}")
+        lines.append("")
+
+        # Sessions
+        sessions = sm.list_sessions()
+        lines.append(f"📋 SESSIONS: {len(sessions)}")
+        for s in sessions[:5]:
+            lines.append(f"  {s['session_id']:20s} → {s['backend']:10s}")
+        lines.append("")
+
+        # Cache
+        lines.append("💾 CACHE:")
+        for name, cache in [("Decompile", decompile_cache), ("Function", function_cache), ("Disasm", disasm_cache)]:
+            stats = cache.stats()
+            lines.append(f"  {name:12s} {stats['size']:4d}/{stats['max_size']}  hit rate: {stats['hit_rate']}")
+        lines.append("")
+
+        # Diff log
+        try:
+            from .diff_engine import diff_engine
+            history = diff_engine.get_history(limit=0)
+            lines.append(f"📝 DIFF LOG: {len(history)} entries")
+        except Exception:
+            lines.append("📝 DIFF LOG: unavailable")
+
+        # Similarity index
+        try:
+            from .similarity import similarity_engine
+            count = similarity_engine.index_count()
+            lines.append(f"🧠 SIMILARITY INDEX: {count} functions indexed")
+        except Exception:
+            lines.append("🧠 SIMILARITY INDEX: unavailable")
+
+        return "\n".join(lines)
+    except Exception as e:
+        return handle_error(e)

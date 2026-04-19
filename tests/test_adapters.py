@@ -482,6 +482,38 @@ class TestAutoAnnotator:
         matches = match_function(code)
         assert len(matches) == 0
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Auto-Session Tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestAutoSession:
+    """Test auto-session detection and creation."""
+
+    def test_probe_port_closed(self):
+        from core.auto_session import probe_port
+        # Port 59999 should not be open
+        assert probe_port("127.0.0.1", 59999, timeout=0.5) == False
+
+    def test_detect_returns_list(self):
+        from core.auto_session import detect_running_backends
+        result = detect_running_backends("127.0.0.1")
+        assert isinstance(result, list)
+
+    def test_auto_create_sessions(self):
+        """Auto-create should handle no running backends gracefully."""
+        from core.auto_session import auto_create_sessions
+        from core.session import SessionManager
+        sm = SessionManager()
+        sm._sessions.clear()
+        sm._default_session = None
+        results = auto_create_sessions(sm, host="127.0.0.1")
+        assert isinstance(results, list)
+        # With no backends running, all should have error status or empty
+        for r in results:
+            assert "status" in r
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Adapter Registry Tests
 # ═══════════════════════════════════════════════════════════════════════════════
