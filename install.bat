@@ -2,6 +2,14 @@
 title NexusRE-MCP Installer
 color 0b
 
+:: Auto-Elevate to Administrator
+net session >nul 2>&1
+if %errorLevel% NEQ 0 (
+    echo [*] Requesting Administrator privileges...
+    powershell -Command "Start-Process '%~dpnx0' -Verb RunAs"
+    exit /b
+)
+
 :: Force execution in the exact same directory as the batch file
 pushd "%~dp0"
 
