@@ -12,30 +12,30 @@ python --version >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     color 0c
     echo [ERROR] Python is not installed or not in your system PATH!
-    echo Please install Python 3.10 or higher from python.org and try again.
+    echo Please install Python 3.10 or higher from python.org, select "Add to PATH", and try again.
     pause
     exit /b 1
 )
 
 :: Check for uv package manager
-uv --version >nul 2>&1
+python -m uv --version >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     echo [~] 'uv' package manager not found. Installing via pip...
-    pip install uv
+    python -m pip install uv
     IF %ERRORLEVEL% NEQ 0 (
         color 0c
-        echo [ERROR] Failed to install 'uv' package manager.
+        echo [ERROR] Failed to install 'uv' package manager via pip.
         pause
         exit /b 1
     )
 )
 
 echo [*] Synchronizing dependencies...
-uv sync
+python -m uv sync
 
 echo.
 echo [*] Launching Setup Wizard...
-uv run main.py setup
+python -m uv run main.py setup
 
 echo.
 pause
