@@ -1,6 +1,14 @@
 import threading
 import json
-import BaseHTTPServer
+import sys
+
+# Python 2 / 3 Compatibility
+if sys.version_info[0] < 3:
+    import BaseHTTPServer
+    from BaseHTTPServer import BaseHTTPRequestHandler
+else:
+    from http.server import HTTPServer as BaseHTTPServer
+    from http.server import BaseHTTPRequestHandler
 
 # Attempt to load ghidra-specific state, catching exceptions if run outside
 try:
@@ -12,9 +20,14 @@ try:
 except ImportError:
     pass
 
-class GhidraRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class GhidraRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        content_length = int(self.headers.getheader('content-length', 0))
+        try:
+            content_length_str = self.headers.get('Content-Length') or self.headers.get('content-length')
+            content_length = int(content_length_str) if content_length_str else 0
+        except Exception:
+            content_length = 0
+            
         post_data = self.rfile.read(content_length)
         if not post_data:
             self.send_response(400)
@@ -79,12 +92,12 @@ class GhidraRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         pass # Suppress noisy logging
 
 def start_server():
-    server = BaseHTTPServer.HTTPServer(('127.0.0.1', 10102), GhidraRequestHandler)
-    print "[Ghidra-MCP] Starting background HTTP server on 127.0.0.1:10102 ..."
+    server = BaseHTTPServer(('127.0.0.1', 10102), GhidraRequestHandler)
+    print("\n[Ghidra-MCP] Starting background HTTP server on 127.0.0.1:10102 ...")
     server.serve_forever()
 
 if __name__ == "__main__":
-    print "Starting NexusRE MCP Ghidra Plugin..."
+    print("\nStarting NexusRE MCP Ghidra Plugin...")
     t = threading.Thread(target=start_server)
     t.daemon = True
     t.start()
