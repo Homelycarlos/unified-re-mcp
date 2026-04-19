@@ -9,7 +9,7 @@ from schemas.models import (
 
 class BinjaAdapter(BaseAdapter):
     """
-    Adapter mapping NexusRE MCP tool calls to the Binary Ninja background
+    Adapter mapping NexusRE-MCP tool calls to the Binary Ninja background
     HTTP server running inside the binja UI script.
     """
     def __init__(self, backend_url: str):

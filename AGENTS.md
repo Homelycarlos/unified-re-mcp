@@ -1,6 +1,6 @@
 # AI Agent Context Instructions
 
-This document provides guidelines and "Master Prompts" tailored for Large Language Models (LLMs) interacting with the **NexusRE MCP Server**. 
+This document provides guidelines and "Master Prompts" tailored for Large Language Models (LLMs) interacting with the **NexusRE-MCP Server**. 
 
 If you are an AI assistant analyzing a binary, you must adhere strictly to these operational constraints to prevent token-overflows, hallucinations, and state corruption.
 

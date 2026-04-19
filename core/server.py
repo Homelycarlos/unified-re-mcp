@@ -44,7 +44,7 @@ _command_log: List[dict] = []
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NexusRE")
 
-mcp = FastMCP("NexusRE MCP Server")
+mcp = FastMCP("NexusRE-MCP Server")
 session_manager = SessionManager()
 
 def get_adapter(session_id: str):

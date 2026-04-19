@@ -36,7 +36,7 @@ def print_config():
     """Print the JSON configuration for manual copy-paste."""
     config = get_config_json()
     print("=========================================")
-    print(" NEXUSRE MCP SERVER CONFIGURATION")
+    print(" NEXUSRE-MCP SERVER CONFIGURATION")
     print("=========================================\n")
     print("Copy the JSON block below and paste it into your MCP client's configuration file:")
     print(" - Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json or ~/Library/Application Support/Claude/claude_desktop_config.json")
@@ -161,7 +161,7 @@ def auto_install():
 
 def print_help():
     print("""
-NexusRE MCP Server
+NexusRE-MCP Server
 =======================================
 
 Usage:
@@ -210,7 +210,7 @@ def main_cli():
             port = int(sys.argv[idx + 1])
 
     if transport == "sse":
-        print(f"[*] Starting NEXUSRE MCP SERVER with SSE transport on port {port}...")
+        print(f"[*] Starting NEXUSRE-MCP SERVER with SSE transport on port {port}...")
         
         # Setup Auth & Rate Limiting for SSE
         from starlette.middleware.base import BaseHTTPMiddleware

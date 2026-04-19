@@ -9,7 +9,7 @@ from schemas.models import (
 
 class X64DbgAdapter(BaseAdapter):
     """
-    Adapter mapping NexusRE MCP tool calls to the x64dbg background
+    Adapter mapping NexusRE-MCP tool calls to the x64dbg background
     HTTP server running inside the debugged process wrapper.
     All calls are dispatched as JSON POST requests with an 'action' key.
     """

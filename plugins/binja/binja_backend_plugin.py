@@ -413,11 +413,11 @@ def start_mcp_server(bv):
     t = threading.Thread(target=start_server_thread)
     t.daemon = True
     t.start()
-    bn.show_message_box("NexusRE MCP", "MCP Background Server Started!\nYou can now connect Cursor/Claude to this binary using backend 'binja'", bn.MessageBoxButtonSet.OKButtonSet, bn.MessageBoxIcon.InformationIcon)
+    bn.show_message_box("NexusRE-MCP", "MCP Background Server Started!\nYou can now connect Cursor/Claude to this binary using backend 'binja'", bn.MessageBoxButtonSet.OKButtonSet, bn.MessageBoxIcon.InformationIcon)
 
 try:
     PluginCommand.register(
-        "NexusRE MCP\\Start Background Server",
+        "NexusRE-MCP\\Start Background Server",
         "Starts the HTTP JSON-RPC listener for AI connections",
         start_mcp_server
     )

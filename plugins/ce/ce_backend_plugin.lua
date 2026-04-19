@@ -4,7 +4,7 @@ local port = 10105
 local server = assert(socket.bind("127.0.0.1", port))
 server:settimeout(0.1)
 
-print("[NexusRE MCP] Cheat Engine Bridge started on Port " .. tostring(port))
+print("[NexusRE-MCP] Cheat Engine Bridge started on Port " .. tostring(port))
 
 local client = nil
 

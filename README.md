@@ -1,7 +1,7 @@
 <br/>
 <div align="center">
 
-# ⚡ NexusRE MCP
+# ⚡ NexusRE-MCP
 **The Universal AI Bridge for Game Hacking & Reverse Engineering**
 
 [![PyPI version](https://badge.fury.io/py/nexusre-mcp.svg)](https://badge.fury.io/py/nexusre-mcp)
@@ -38,13 +38,13 @@ Usually, a developer writes a Python script for IDA, a Lua script for Cheat Engi
 
 ## 🚀 Installation & Setup
 
-NexusRE MCP is built using modern Python environments management (we strongly recommend using [uv](https://docs.astral.sh/uv/)). 
+NexusRE-MCP is built using modern Python environments management (we strongly recommend using [uv](https://docs.astral.sh/uv/)). 
 
 ### Option A: Local Run (Recommended)
 If you have the repository locally, you can use `uv` to automatically manage dependencies and run the server without polluting your global Python registry.
 
 ```bash
-cd path/to/unified-re-mcp
+cd path/to/NexusRE-MCP
 
 # To auto-attach NexusRE to your Cursor or Claude Desktop config:
 uv run main.py --install
