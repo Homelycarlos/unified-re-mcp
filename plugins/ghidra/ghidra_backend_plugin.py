@@ -118,7 +118,9 @@ class GhidraRequestHandler(BaseHTTPRequestHandler):
             funcs  = []
             fm = prog.getFunctionManager()
             idx = 0
-            for f in fm.getFunctions(True):
+            it = fm.getFunctions(True)
+            while it.hasNext():
+                f = it.next()
                 name = f.getName()
                 if filt and filt.lower() not in name.lower():
                     continue
@@ -215,7 +217,9 @@ class GhidraRequestHandler(BaseHTTPRequestHandler):
             filt   = args.get("filter")
             strings = []
             idx = 0
-            for data in DefinedDataIterator.definedStrings(prog):
+            it = DefinedDataIterator.definedStrings(prog)
+            while it.hasNext():
+                data = it.next()
                 val = data.getDefaultValueRepresentation()
                 if filt and filt.lower() not in val.lower():
                     continue
@@ -239,7 +243,9 @@ class GhidraRequestHandler(BaseHTTPRequestHandler):
             globs  = []
             st = prog.getSymbolTable()
             idx = 0
-            for sym in st.getAllSymbols(True):
+            it = st.getAllSymbols(True)
+            while it.hasNext():
+                sym = it.next()
                 if sym.isExternal():
                     continue
                 name = sym.getName()
@@ -293,7 +299,9 @@ class GhidraRequestHandler(BaseHTTPRequestHandler):
             imps   = []
             st = prog.getSymbolTable()
             idx = 0
-            for sym in st.getExternalSymbols():
+            it = st.getExternalSymbols()
+            while it.hasNext():
+                sym = it.next()
                 if idx < offset:
                     idx += 1
                     continue
@@ -315,7 +323,9 @@ class GhidraRequestHandler(BaseHTTPRequestHandler):
             exps   = []
             st = prog.getSymbolTable()
             idx = 0
-            for sym in st.getAllSymbols(True):
+            it = st.getAllSymbols(True)
+            while it.hasNext():
+                sym = it.next()
                 if sym.isExternalEntryPoint():
                     if idx < offset:
                         idx += 1
