@@ -12,6 +12,21 @@ from core.server import mcp
 def get_config_json() -> dict:
     """Generate the MCP client configuration JSON dynamically."""
     script_path = os.path.abspath(__file__)
+    root_dir = os.path.dirname(script_path)
+    venv_python = os.path.join(root_dir, ".venv", "Scripts", "python.exe") if platform.system() == "Windows" else os.path.join(root_dir, ".venv", "bin", "python")
+    
+    # If the user has already run 'uv sync', use the venv for zero-latency startup
+    if os.path.exists(venv_python):
+        return {
+            "mcpServers": {
+                "nexusre-mcp": {
+                    "command": venv_python,
+                    "args": [script_path]
+                }
+            }
+        }
+    
+    # Fallback to uv run --with if no venv is found
     return {
         "mcpServers": {
             "nexusre-mcp": {
@@ -132,7 +147,7 @@ def auto_install():
 
         # Check if already installed
         if server_key in existing["mcpServers"]:
-            print(f"[✓] {client_name} ({config_path})")
+            print(f"[OK] {client_name} ({config_path})")
             print(f"    Already configured. Updating to latest path...")
         else:
             print(f"[+] {client_name} ({config_path})")
@@ -149,12 +164,12 @@ def auto_install():
             json.dump(existing, f, indent=2)
 
         installed_count += 1
-        print(f"    ✅ Done! Restart {client_name} for changes to take effect.\n")
+        print(f"    Done! Restart {client_name} for changes to take effect.\n")
 
     if installed_count == 0:
         print("[!] No config files were written. Check that your MCP clients are installed.")
     else:
-        print(f"[✓] Successfully configured {installed_count} client(s).")
+        print(f"[OK] Successfully configured {installed_count} client(s).")
 
     sys.exit(0)
 

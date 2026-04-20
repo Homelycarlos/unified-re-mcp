@@ -10,8 +10,13 @@ class BrainMemory:
     A persistent SQLite database to store contextual insights,
     pointer chains, findings, sessions, and request audit logs.
     """
-    def __init__(self, db_path="nexusre_brain.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        if db_path is None:
+            # Put the DB in the project root (one level up from core/)
+            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            self.db_path = os.path.join(root_dir, "nexusre_brain.db")
+        else:
+            self.db_path = db_path
         self._init_db()
 
     def _init_db(self):
