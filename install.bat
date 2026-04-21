@@ -18,40 +18,34 @@ echo         NEXUSRE-MCP ONE-CLICK INSTALLER
 echo ==================================================
 echo.
 
-:: Detect Python executable (gracefully handles users who didn't click "Add to PATH")
-set PYTHON_CMD=python
-%PYTHON_CMD% --version >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    set PYTHON_CMD=py
-    py --version >nul 2>&1
-    IF ERRORLEVEL 1 (
-        color 0c
-        echo [ERROR] Python is not installed or not in your system PATH!
-        echo Please install Python 3.10 or higher from python.org, select "Add to PATH", and try again.
-        pause
-        exit /b 1
+:: Check for uv
+where uv >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    if exist "%USERPROFILE%\.cargo\bin\uv.exe" (
+        set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
+    ) else (
+        echo [*] 'uv' package manager not found. Downloading standalone version...
+        powershell -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+        if exist "%USERPROFILE%\.cargo\bin\uv.exe" (
+            set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
+        ) else (
+            color 0c
+            echo [ERROR] Failed to install uv. Please ensure you have internet access.
+            pause
+            exit /b 1
+        )
     )
 )
 
-:: Check for uv package manager
-%PYTHON_CMD% -m uv --version >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    echo [~] 'uv' package manager not found. Installing via pip...
-    %PYTHON_CMD% -m pip install uv
-    IF ERRORLEVEL 1 (
-        color 0c
-        echo [ERROR] Failed to install 'uv' package manager via pip.
-        pause
-        exit /b 1
-    )
-)
+echo [*] Syncing internal Python toolchain...
+uv python install 3.12 --quiet
 
 echo [*] Synchronizing dependencies...
-%PYTHON_CMD% -m uv sync
+uv sync
 
 echo.
 echo [*] Launching Setup Wizard...
-%PYTHON_CMD% -m uv run main.py setup
+uv run main.py setup
 
 echo.
 pause
