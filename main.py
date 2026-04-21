@@ -63,70 +63,6 @@ def print_config():
     sys.exit(0)
 
 
-def _find_claude_config_paths() -> list:
-    """Return a list of possible Claude Desktop config file paths on this system."""
-    paths = []
-    system = platform.system()
-
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            # Standard install
-            paths.append(os.path.join(appdata, "Claude", "claude_desktop_config.json"))
-        # Windows Store (UWP) app — scan for the package folder
-        local_appdata = os.environ.get("LOCALAPPDATA", "")
-        if local_appdata:
-            packages_dir = os.path.join(local_appdata, "Packages")
-            if os.path.isdir(packages_dir):
-                for entry in os.listdir(packages_dir):
-                    if entry.startswith("Claude_"):
-                        uwp_path = os.path.join(packages_dir, entry, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json")
-                        paths.append(uwp_path)
-    elif system == "Darwin":
-        home = os.path.expanduser("~")
-        paths.append(os.path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"))
-    elif system == "Linux":
-        xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-        paths.append(os.path.join(xdg, "Claude", "claude_desktop_config.json"))
-
-    return paths
-
-
-def _find_cursor_config_paths() -> list:
-    """Return a list of possible Cursor MCP config file paths on this system."""
-    paths = []
-    system = platform.system()
-
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            paths.append(os.path.join(appdata, "Cursor", "User", "globalStorage", "mcp.json"))
-    elif system == "Darwin":
-        home = os.path.expanduser("~")
-        paths.append(os.path.join(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "mcp.json"))
-    elif system == "Linux":
-        xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-        paths.append(os.path.join(xdg, "Cursor", "User", "globalStorage", "mcp.json"))
-
-    return paths
-
-
-def _find_kiro_config_paths() -> list:
-    """Return a list of possible Kiro IDE MCP config file paths on this system."""
-    paths = []
-    home = os.path.expanduser("~")
-    paths.append(os.path.join(home, ".kiro", "settings", "mcp.json"))
-    return paths
-
-
-def _find_windsurf_config_paths() -> list:
-    """Return a list of possible Windsurf IDE MCP config file paths on this system."""
-    paths = []
-    home = os.path.expanduser("~")
-    paths.append(os.path.join(home, ".codeium", "windsurf", "mcp_config.json"))
-    return paths
-
-
 def get_mcp_clients() -> dict:
     """Return a dictionary of supported MCP clients and their configurations."""
     home = os.path.expanduser("~")
@@ -195,19 +131,26 @@ def auto_install():
             existing = {}
             if os.path.exists(path):
                 try:
-                    with open(path, "r", encoding="utf-8") as f: existing = json.load(f)
-                except: existing = {}
+                    with open(path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except Exception:
+                    existing = {}
 
             root_key = data["key"]
-            if root_key not in existing: existing[root_key] = {}
+            if root_key not in existing:
+                existing[root_key] = {}
 
             if server_key in existing[root_key]:
-                print(f"[OK] {name}\n    Already configured -> {path}")
+                print(f"[OK] {name}")
+                print(f"    Already configured -> {path}")
             else:
-                print(f"[+] {name}\n    Installing MCP config -> {path}")
+                print(f"[+] {name}")
+                print(f"    Installing MCP config -> {path}")
 
             existing[root_key][server_key] = server_block
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+            parent_dir = os.path.dirname(path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=2)
 
@@ -454,23 +397,31 @@ def auto_install_silent():
             existing = {}
             if os.path.exists(path):
                 try:
-                    with open(path, "r", encoding="utf-8") as f: existing = json.load(f)
-                except: pass
+                    with open(path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except Exception:
+                    pass
 
             root_key = data["key"]
-            if root_key not in existing: existing[root_key] = {}
-            
+            if root_key not in existing:
+                existing[root_key] = {}
+
             if server_key not in existing[root_key]:
                 existing[root_key][server_key] = server_block
                 try:
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    with open(path, "w", encoding="utf-8") as f: json.dump(existing, f, indent=2)
+                    parent_dir = os.path.dirname(path)
+                    if parent_dir:
+                        os.makedirs(parent_dir, exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(existing, f, indent=2)
                     print(f"  [+] {name} config updated")
                     installed += 1
-                except: pass
+                except Exception:
+                    pass
 
     if installed == 0:
         print("  [-] No standard MCP clients updated automatically.")
+
 
 def quickstart():
     """Interactive quickstart guide."""
@@ -536,7 +487,7 @@ Usage:
   nexusre-mcp setup                 One-command setup wizard
   nexusre-mcp quickstart            Interactive quickstart guide
   nexusre-mcp --config              Print JSON config for manual setup
-  nexusre-mcp --install             Auto-inject config into Claude/Cursor
+  nexusre-mcp --install             Auto-inject config into all supported IDEs
   nexusre-mcp --install-plugins     Auto-copy plugins to IDA/Ghidra/x64dbg
   nexusre-mcp --transport sse       Start with SSE transport (HTTP)
   nexusre-mcp --port 8080           Set the SSE server port
