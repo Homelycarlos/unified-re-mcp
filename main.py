@@ -55,399 +55,246 @@ def print_config():
     print("=========================================\n")
     print("Copy the JSON block below and paste it into your MCP client's configuration file:")
     print(" - Claude Desktop: %APPDATA%\\Claude\\claude_desktop_config.json or ~/Library/Application Support/Claude/claude_desktop_config.json")
-    print(" - Cursor / Roo Code / Cline: Add to your MCP settings or workspace mcp.json")
-    print(" - Windsurf / Trae: ~/.codeium/windsurf/mcp_config.json")
+    print(" - Cursor: Adds to your MCP settings or workspace mcp.json")
+    print(" - VS Code (Cline / Roo): Autoconfigured to globalStorage")
+    print(" - Zed: Autoconfigured to context_servers in settings.json")
+    print(" - Windsurf: ~/.codeium/windsurf/mcp_config.json")
+    print(" - Trae: Add to your project root .trae/mcp.json")
     print(" - Kiro IDE: ~/.kiro/settings/mcp.json\n")
     print(json.dumps(config, indent=2))
     print("\n=========================================")
     sys.exit(0)
 
 
-def _find_claude_config_paths() -> list:
-    """Return a list of possible Claude Desktop config file paths on this system."""
-    paths = []
-    system = platform.system()
-
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            # Standard install
-            paths.append(os.path.join(appdata, "Claude", "claude_desktop_config.json"))
-        # Windows Store (UWP) app — scan for the package folder
-        local_appdata = os.environ.get("LOCALAPPDATA", "")
-        if local_appdata:
-            packages_dir = os.path.join(local_appdata, "Packages")
-            if os.path.isdir(packages_dir):
-                for entry in os.listdir(packages_dir):
-                    if entry.startswith("Claude_"):
-                        uwp_path = os.path.join(packages_dir, entry, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json")
-                        paths.append(uwp_path)
-    elif system == "Darwin":
-        home = os.path.expanduser("~")
-        paths.append(os.path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"))
-    elif system == "Linux":
-        xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-        paths.append(os.path.join(xdg, "Claude", "claude_desktop_config.json"))
-
-    return paths
-
-
-def _find_cursor_config_paths() -> list:
-    """Return a list of possible Cursor MCP config file paths on this system."""
-    paths = []
-    system = platform.system()
-
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            paths.append(os.path.join(appdata, "Cursor", "User", "globalStorage", "mcp.json"))
-    elif system == "Darwin":
-        home = os.path.expanduser("~")
-        paths.append(os.path.join(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "mcp.json"))
-    elif system == "Linux":
-        xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-        paths.append(os.path.join(xdg, "Cursor", "User", "globalStorage", "mcp.json"))
-
-    return paths
-
-
-def _find_kiro_config_paths() -> list:
-    """Return a list of possible Kiro IDE MCP config file paths on this system."""
-    paths = []
+def get_mcp_clients() -> dict:
+    """Return a dictionary of supported MCP clients and their configurations."""
     home = os.path.expanduser("~")
-    paths.append(os.path.join(home, ".kiro", "settings", "mcp.json"))
-    return paths
+    appdata = os.environ.get("APPDATA", "")
+    local_appdata = os.environ.get("LOCALAPPDATA", "")
+    linux_conf = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    mac_app = os.path.join(home, "Library", "Application Support")
 
+    def get_paths(win=None, mac=None, lin=None, extra=None):
+        paths = []
+        sys_os = platform.system()
+        if sys_os == "Windows" and win: paths.append(win)
+        elif sys_os == "Darwin" and mac: paths.append(mac)
+        elif sys_os == "Linux" and lin: paths.append(lin)
+        if extra: paths.extend(extra)
+        return paths
 
-def _find_windsurf_config_paths() -> list:
-    """Return a list of possible Windsurf IDE MCP config file paths on this system."""
-    paths = []
-    home = os.path.expanduser("~")
-    paths.append(os.path.join(home, ".codeium", "windsurf", "mcp_config.json"))
-    return paths
+    # Windows Store Claude
+    uwp_claude = []
+    if local_appdata:
+        packages_dir = os.path.join(local_appdata, "Packages")
+        if os.path.isdir(packages_dir):
+            for entry in os.listdir(packages_dir):
+                if entry.startswith("Claude_"):
+                    uwp_claude.append(os.path.join(packages_dir, entry, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
 
+    clients = {
+        "Claude Desktop": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": get_paths(
+                win=os.path.join(appdata, "Claude", "claude_desktop_config.json") if appdata else None,
+                mac=os.path.join(mac_app, "Claude", "claude_desktop_config.json"),
+                lin=os.path.join(linux_conf, "Claude", "claude_desktop_config.json"),
+                extra=uwp_claude
+            )
+        },
+        "Cursor": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": get_paths(
+                win=os.path.join(appdata, "Cursor", "User", "globalStorage", "mcp.json") if appdata else None,
+                mac=os.path.join(mac_app, "Cursor", "User", "globalStorage", "mcp.json"),
+                lin=os.path.join(linux_conf, "Cursor", "User", "globalStorage", "mcp.json")
+            )
+        },
+        "Windsurf IDE": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": [os.path.join(home, ".codeium", "windsurf", "mcp_config.json")]
+        },
+        "Kiro IDE": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": [os.path.join(home, ".kiro", "settings", "mcp.json")]
+        },
+        "Trae IDE": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": [os.path.join(home, ".trae", "mcp.json")]
+        },
+        "Zed IDE": {
+            "type": "global",
+            "key": "context_servers",
+            "paths": get_paths(
+                win=os.path.join(local_appdata, "Zed", "settings.json") if local_appdata else None,
+                mac=os.path.join(mac_app, "Zed", "settings.json"),
+                lin=os.path.join(linux_conf, "zed", "settings.json")
+            )
+        },
+        "Roo Code (VS Code)": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": get_paths(
+                win=os.path.join(appdata, "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json") if appdata else None,
+                mac=os.path.join(mac_app, "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json"),
+                lin=os.path.join(linux_conf, "Code", "User", "globalStorage", "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")
+            )
+        },
+        "Cline (VS Code)": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": get_paths(
+                win=os.path.join(appdata, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json") if appdata else None,
+                mac=os.path.join(mac_app, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"),
+                lin=os.path.join(linux_conf, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")
+            )
+        },
+        "Claude Code (CLI)": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": [os.path.join(home, ".claude.json")]
+        },
+        "LM Studio": {
+            "type": "global",
+            "key": "mcpServers",
+            "paths": [os.path.join(home, ".cache", "lm-studio", "mcpServers.json")]
+        },
+        "VS Code Workspace": {
+            "type": "workspace",
+            "instructions": "Create a '.vscode/mcp.json' file locally."
+        },
+        "Copilot CLI": {
+            "type": "unsupported",
+            "instructions": "Does not natively support user-provided local MCP JSON files."
+        },
+        "Amazon Q Developer CLI": {
+            "type": "unsupported",
+            "instructions": "Proprietary CLI. Does not natively support global MCP JSON injection."
+        },
+        "Gemini CLI": {
+            "type": "unsupported",
+            "instructions": "Does not feature a global MCP config standard."
+        },
+        "Warp": {
+            "type": "unsupported",
+            "instructions": "Relies on Warp's internal workflow configuration settings."
+        },
+        "Crush IDE / Kilo Code / Opencode / Qodo Gen / Qwen Coder / Codex / Augment Code": {
+            "type": "fallback",
+            "instructions": "If these are VS Code forks/extensions, configure via '.vscode/mcp.json' or their extension settings."
+        }
+    }
+    return clients
 
 def auto_install():
-    """
-    Automatically detect Claude Desktop and Cursor, then inject the MCP
-    server configuration into their config files without any manual copy-paste.
-    """
+    print("\n============================================")
+    print("|     MCP UNIVERSAL AUTO-INSTALLER         |")
+    print("============================================\n")
     config_fragment = get_config_json()
     server_key = "nexusre-mcp"
     server_block = config_fragment["mcpServers"][server_key]
 
-    targets = []
-    for path in _find_claude_config_paths():
-        targets.append(("Claude Desktop", path))
-    for path in _find_cursor_config_paths():
-        targets.append(("Cursor", path))
-    for path in _find_kiro_config_paths():
-        targets.append(("Kiro IDE", path))
-    for path in _find_windsurf_config_paths():
-        targets.append(("Windsurf IDE", path))
-
-    if not targets:
-        print("[!] Could not find any known MCP client config directories on this system.")
-        print("    Run --config to get the JSON and paste it manually.")
-        sys.exit(1)
-
+    clients = get_mcp_clients()
     installed_count = 0
-    for client_name, config_path in targets:
-        # Load existing config or start fresh
-        existing = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                existing = {}
+    unsupported = []
 
-        # Ensure mcpServers key exists
-        if "mcpServers" not in existing:
-            existing["mcpServers"] = {}
+    for name, data in clients.items():
+        if data["type"] != "global":
+            unsupported.append((name, data))
+            continue
+            
+        for path in data["paths"]:
+            if not path:
+                continue
+            
+            existing = {}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    existing = {}
 
-        # Check if already installed
-        if server_key in existing["mcpServers"]:
-            print(f"[OK] {client_name} ({config_path})")
-            print(f"    Already configured. Updating to latest path...")
-        else:
-            print(f"[+] {client_name} ({config_path})")
-            print(f"    Installing NexusRE-MCP server config...")
+            root_key = data["key"]
+            if root_key not in existing:
+                existing[root_key] = {}
 
-        # Inject / update the server block
-        existing["mcpServers"][server_key] = server_block
+            # Check if already installed
+            if server_key in existing[root_key]:
+                print(f"[OK] {name}")
+                print(f"    Already configured -> {path}")
+            else:
+                print(f"[+] {name}")
+                print(f"    Installing MCP config -> {path}")
 
-        # Ensure parent directories exist
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            existing[root_key][server_key] = server_block
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2)
 
-        # Write back
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=2)
-
-        installed_count += 1
-        print(f"    Done! Restart {client_name} for changes to take effect.\n")
+            installed_count += 1
+            print(f"    Done! Restart {name} for changes to take effect.\n")
 
     if installed_count == 0:
-        print("[!] No config files were written. Check that your MCP clients are installed.")
+        print("[!] No standard MCP configuration files were written.")
     else:
-        print(f"[OK] Successfully configured {installed_count} client(s).")
+        print(f"\n[*] Successfully configured {installed_count} client(s).\n")
 
+    print("\n--- Manual Configuration Guide ---")
+    for name, data in unsupported:
+        print(f"- {name}: {data['instructions']}")
+
+    print("\n============================================")
     sys.exit(0)
-
-def install_plugins():
-    """Auto-detect installed RE tools and copy the corresponding backend plugins."""
-    import shutil
-    import glob
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    plugins_dir = os.path.join(script_dir, "plugins")
-    installed = 0
-
-    # ── IDA Pro ──
-    ida_targets = []
-    appdata = os.environ.get("APPDATA", "")
-    if appdata:
-        ida_targets.append(os.path.join(appdata, "Hex-Rays", "IDA Pro", "plugins"))
-    for v in ["8.3", "8.4", "9.0"]:
-        ida_targets.append(os.path.join("C:\\", f"IDA Pro {v}", "plugins"))
-        ida_targets.append(os.path.join(os.environ.get("PROGRAMFILES", ""), f"IDA Pro {v}", "plugins"))
-
-    for target in ida_targets:
-        if os.path.isdir(target):
-            src = os.path.join(plugins_dir, "ida", "ida_backend_plugin.py")
-            dst = os.path.join(target, "ida_backend_plugin.py")
-            shutil.copy2(src, dst)
-            print(f"[+] IDA Pro: Copied plugin to {target}")
-            installed += 1
-            break
-    else:
-        print("[!] IDA Pro not found. Skipping.")
-
-    # ── Ghidra ──
-    ghidra_dir = os.environ.get("GHIDRA_INSTALL_DIR", "")
-    ghidra_targets = []
-    if ghidra_dir:
-        ghidra_targets.append(os.path.join(ghidra_dir, "Ghidra", "Features", "Python", "ghidra_scripts"))
-    home = os.path.expanduser("~")
-    ghidra_targets.append(os.path.join(home, "ghidra_scripts"))
-
-    for target in ghidra_targets:
-        if os.path.isdir(target):
-            src = os.path.join(plugins_dir, "ghidra", "ghidra_backend_plugin.py")
-            dst = os.path.join(target, "ghidra_backend_plugin.py")
-            shutil.copy2(src, dst)
-            print(f"[+] Ghidra: Copied plugin to {target}")
-            installed += 1
-            break
-    else:
-        # Create user scripts dir as fallback
-        fallback = os.path.join(home, "ghidra_scripts")
-        os.makedirs(fallback, exist_ok=True)
-        src = os.path.join(plugins_dir, "ghidra", "ghidra_backend_plugin.py")
-        shutil.copy2(src, os.path.join(fallback, "ghidra_backend_plugin.py"))
-        print(f"[+] Ghidra: Created {fallback} and copied plugin. Add this to Script Manager.")
-        installed += 1
-
-    # ── Binary Ninja ──
-    binja_target = os.path.join(appdata, "Binary Ninja", "plugins") if appdata else ""
-    if binja_target and os.path.isdir(binja_target):
-        src = os.path.join(plugins_dir, "binja", "binja_backend_plugin.py")
-        shutil.copy2(src, os.path.join(binja_target, "binja_backend_plugin.py"))
-        print(f"[+] Binary Ninja: Copied plugin to {binja_target}")
-        installed += 1
-    else:
-        print("[!] Binary Ninja not found. Skipping.")
-
-    # ── Cheat Engine ──
-    for v in ["7.5", "7.4"]:
-        ce_path = os.path.join(os.environ.get("PROGRAMFILES", ""), f"Cheat Engine {v}", "autorun")
-        if os.path.isdir(ce_path):
-            src = os.path.join(plugins_dir, "ce", "ce_backend_plugin.lua")
-            shutil.copy2(src, os.path.join(ce_path, "ce_backend_plugin.lua"))
-            print(f"[+] Cheat Engine: Copied plugin to {ce_path}")
-            installed += 1
-            break
-    else:
-        print("[!] Cheat Engine not found. Skipping.")
-
-    print(f"\n[*] Installed {installed} plugin(s). Restart your RE tools for changes to take effect.")
-    sys.exit(0)
-
-
-def setup_wizard():
-    """One-command setup: detect tools, install plugins, inject MCP config."""
-    print("")
-    print("============================================")
-    print("|     NEXUSRE-MCP SETUP WIZARD             |")
-    print("============================================")
-    print("")
-
-    # Step 1: Detect installed RE tools
-    print("[1/4] Scanning for installed reverse engineering tools...")
-    tools_found = []
-
-    # IDA Pro
-    ida_paths = []
-    appdata = os.environ.get("APPDATA", "")
-    if appdata:
-        ida_paths.append(os.path.join(appdata, "Hex-Rays", "IDA Pro", "plugins"))
-    for v in ["8.3", "8.4", "9.0", "9.1"]:
-        ida_paths.append(os.path.join(os.environ.get("PROGRAMFILES", ""), f"IDA Pro {v}"))
-        ida_paths.append(os.path.join("C:\\", f"IDA Pro {v}"))
-    for p in ida_paths:
-        if os.path.exists(p):
-            tools_found.append(("IDA Pro", p))
-            print(f"  [+] IDA Pro found: {p}")
-            break
-    else:
-        print("  [-] IDA Pro: not found")
-
-    # Ghidra
-    ghidra_dir = os.environ.get("GHIDRA_INSTALL_DIR", "")
-    ghidra_paths = [ghidra_dir] if ghidra_dir else []
-    for drive in ["C:\\", "D:\\"]:
-        for name in ["ghidra", "Ghidra"]:
-            ghidra_paths.append(os.path.join(drive, name))
-    home = os.path.expanduser("~")
-    ghidra_paths.append(os.path.join(home, "ghidra_scripts"))
-    for p in ghidra_paths:
-        if os.path.exists(p):
-            tools_found.append(("Ghidra", p))
-            print(f"  [+] Ghidra found: {p}")
-            break
-    else:
-        print("  [-] Ghidra: not found")
-
-    # x64dbg
-    x64dbg_paths = [
-        os.path.join(os.environ.get("PROGRAMFILES", ""), "x64dbg"),
-        os.path.join("C:\\", "x64dbg"),
-        os.path.join(home, "x64dbg"),
-    ]
-    for p in x64dbg_paths:
-        if os.path.exists(p):
-            tools_found.append(("x64dbg", p))
-            print(f"  [+] x64dbg found: {p}")
-            break
-    else:
-        print("  [-] x64dbg: not found")
-
-    # Binary Ninja
-    if appdata:
-        binja_path = os.path.join(appdata, "Binary Ninja", "plugins")
-        if os.path.exists(binja_path):
-            tools_found.append(("Binary Ninja", binja_path))
-            print(f"  [+] Binary Ninja found: {binja_path}")
-        else:
-            print("  [-] Binary Ninja: not found")
-
-    print(f"\n  Found {len(tools_found)} tool(s).\n")
-
-    # Step 2: Install plugins
-    print("[2/4] Installing backend plugins...")
-    install_plugins_silent()
-
-    # Step 3: Inject MCP config
-    print("\n[3/4] Configuring MCP clients...")
-    auto_install_silent()
-
-    # Step 4: Probe running backends
-    print("\n[4/4] Probing for running backends...")
-    from core.auto_session import detect_running_backends
-    backends = detect_running_backends()
-    if backends:
-        for b in backends:
-            print(f"  [+] {b['backend']} detected on port {b['port']}")
-    else:
-        print("  [-] No backends running. Start IDA/Ghidra and they'll auto-connect.")
-
-    print("")
-    print("============================================")
-    print("|  [+] SETUP COMPLETE!                     |")
-    print("--------------------------------------------")
-    print("|  Restart Claude/Cursor to activate.      |")
-    print("|  Then ask: 'Run full_analysis'            |")
-    print("============================================")
-    print("")
-    sys.exit(0)
-
-
-def install_plugins_silent():
-    """Install plugins without sys.exit."""
-    import shutil
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    plugins_dir = os.path.join(script_dir, "plugins")
-    installed = 0
-
-    # IDA
-    appdata = os.environ.get("APPDATA", "")
-    ida_targets = []
-    if appdata:
-        ida_targets.append(os.path.join(appdata, "Hex-Rays", "IDA Pro", "plugins"))
-    for v in ["8.3", "8.4", "9.0", "9.1"]:
-        ida_targets.append(os.path.join(os.environ.get("PROGRAMFILES", ""), f"IDA Pro {v}", "plugins"))
-    for target in ida_targets:
-        if os.path.isdir(target):
-            src = os.path.join(plugins_dir, "ida", "ida_backend_plugin.py")
-            if os.path.exists(src):
-                shutil.copy2(src, os.path.join(target, "ida_backend_plugin.py"))
-                print(f"  [+] IDA plugin -> {target}")
-                installed += 1
-            break
-
-    # Ghidra
-    home = os.path.expanduser("~")
-    ghidra_target = os.path.join(home, "ghidra_scripts")
-    os.makedirs(ghidra_target, exist_ok=True)
-    src = os.path.join(plugins_dir, "ghidra", "ghidra_backend_plugin.py")
-    if os.path.exists(src):
-        shutil.copy2(src, os.path.join(ghidra_target, "ghidra_backend_plugin.py"))
-        print(f"  [+] Ghidra plugin -> {ghidra_target}")
-        installed += 1
-
-    print(f"  Installed {installed} plugin(s).")
-
 
 def auto_install_silent():
-    """Inject MCP config without sys.exit."""
     config_fragment = get_config_json()
     server_key = "nexusre-mcp"
     server_block = config_fragment["mcpServers"][server_key]
+    
+    clients = get_mcp_clients()
     installed = 0
 
-    targets = []
-    for path in _find_claude_config_paths():
-        targets.append(("Claude Desktop", path))
-    for path in _find_cursor_config_paths():
-        targets.append(("Cursor", path))
-    for path in _find_kiro_config_paths():
-        targets.append(("Kiro IDE", path))
-    for path in _find_windsurf_config_paths():
-        targets.append(("Windsurf IDE", path))
+    for name, data in clients.items():
+        if data["type"] != "global":
+            continue
+            
+        for path in data["paths"]:
+            if not path:
+                continue
+            
+            existing = {}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except:
+                    pass
 
-    for client_name, config_path in targets:
-        existing = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                existing = {}
-        if "mcpServers" not in existing:
-            existing["mcpServers"] = {}
-        existing["mcpServers"][server_key] = server_block
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, indent=2)
-        print(f"  [+] {client_name} config updated")
-        installed += 1
+            root_key = data["key"]
+            if root_key not in existing:
+                existing[root_key] = {}
+            
+            if server_key not in existing[root_key]:
+                existing[root_key][server_key] = server_block
+                try:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as f:
+                        json.dump(existing, f, indent=2)
+                    print(f"  [+] {name} config updated")
+                    installed += 1
+                except:
+                    pass
 
     if installed == 0:
-        print("  [-] No MCP clients found. Run --config for manual setup.")
-
+        print("  [-] No standard MCP clients updated automatically.")
 
 def quickstart():
-    """Interactive quickstart guide."""
     print("""
 ======================================================
 |          NEXUSRE-MCP QUICKSTART GUIDE              |
