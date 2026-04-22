@@ -35,10 +35,11 @@ timer.OnTimer = function(t)
             elseif action == "AOB_SCAN" then
                 local pattern = args[2]
                 local ms = AOBScan(pattern)
-                if ms == nil then
+                if ms == nil or ms.Count == 0 then
                     resp = "NOT_FOUND"
+                    if ms ~= nil then ms.destroy() end
                 else
-                    resp = string.format("%X", ms.getString(0))
+                    resp = ms[0]
                     ms.destroy()
                 end
             elseif action == "READ_POINTER_CHAIN" then
