@@ -33,21 +33,35 @@ You don't need to write separate scripts for every tool you use. NexusRE connect
 
 Our custom installer automatically downloads its own sandboxed Python toolchain (via `uv`) and injects the MCP configuration directly into your IDE. **You do not need Python installed on your system!**
 
-### Option A: The "One-Click" Batch Files (Windows Only)
-Inside the downloaded folder, you'll find two scripts that automate everything. Simply double-click them (they will automatically request Administrator privileges):
+### Option A: The "One-Click" Setup Wizard (Windows — Recommended)
 
-1.  **`inject_mcp_configs.bat`**  
-    Automatically detects and connects the MCP server to **Claude Desktop**, **Cursor**, **Windsurf**, **Kiro IDE**, **Trae IDE**, **Zed IDE**, **Roo Code**, **Cline**, **Claude Code**, and **LM Studio**.
-2.  **`inject_plugins.bat`**  
-    Automatically searches your hard drives for **IDA Pro, Ghidra, x64dbg, Binary Ninja, and Cheat Engine** and instantly drops the backend plugins into their respective directories.
+Double-click **`inject_mcp_configs.bat`**. It will automatically request Administrator privileges and then:
 
-### Option B: Command Line Installer (Mac / Linux)
-If you are on macOS or Linux, you can run the core Python engine directly. We recommend using `uv`:
+1.  **Download & install** the `uv` package manager and a sandboxed Python 3.12 if you don't already have them.
+2.  **Scan your system** for installed reverse engineering tools (IDA Pro, Ghidra, x64dbg, Binary Ninja, Cheat Engine).
+3.  **Install backend plugins** directly into each tool it finds.
+4.  **Inject MCP configuration** into all detected AI coding assistants — **Claude Desktop**, **Cursor**, **Windsurf**, **Kiro IDE**, **Trae IDE**, **Zed IDE**, **Roo Code**, **Cline**, **Claude Code**, and **LM Studio**.
+5.  **Auto-fix IDA Pro Python bindings** by running `idapyswitch.exe` if IDA is detected, so you never have to deal with "Python not found" errors.
+6.  **Probe for running backends** and auto-connect to any tools you already have open.
+
+> **That's it.** One double-click and everything is wired up.
+
+### Option B: Command Line Setup (Mac / Linux / Advanced)
 
 ```bash
 cd path/to/NexusRE-MCP
-uv run main.py --install
+uv run main.py setup
 ```
+
+Or, for individual steps:
+
+| Command | What it does |
+|---|---|
+| `uv run main.py setup` | Full setup wizard (recommended) |
+| `uv run main.py --install` | Only inject MCP config into IDEs |
+| `uv run main.py --install-plugins` | Only copy plugins to RE tools |
+| `uv run main.py --config` | Print JSON config for manual paste |
+| `uv run main.py quickstart` | Interactive quickstart guide |
 
 ### Option C: Manual Configuration
 If you use an environment without global configuration files (like **VS Code Workspace**, **Augment Code**, **Qodo Gen**, etc.), simply run:
@@ -56,50 +70,63 @@ uv run main.py --config
 ```
 Then paste the JSON output into your editor's local `.vscode/mcp.json` file.
 
-**(Optional) Share it with your team:**  
-If you want your friends or team to use your server over the internet, run:
+**(Optional) Share it with your team over the network:**  
 ```bash
 set NEXUSRE_API_KEY=your_secret_password
-nexusre-mcp --transport sse --port 8080
+uv run main.py --transport sse --port 8080
 ```
 
 ---
 
 ## 🔌 What tools does it talk to?
 
-NexusRE connects to backend files in the `adapters/` folder. Right now, it supports:
+NexusRE connects to backend plugins in the `plugins/` folder. Right now, it supports:
 
-* **IDA Pro & Ghidra** (For looking at dead game code)
-* **x64dbg & Cheat Engine** (For looking at live game memory)
-* **Frida** (For advanced live code messing)
-* **Kernel Drivers & DMA (2nd PC hacking)** (For bypassing Anti-Cheats like EAC or BattlEye without getting caught)
-* **ReClass.NET** (For reading memory structures)
+| Tool | Port | Type |
+|---|---|---|
+| **IDA Pro** | `10101` | Static analysis (dead code) |
+| **Ghidra** | `10102` | Static analysis (dead code) |
+| **x64dbg** | `10103` | Live debugging |
+| **Binary Ninja** | `10104` | Static analysis |
+| **Cheat Engine** | `10105` | Live memory editing |
+| **Frida** | Headless | Dynamic instrumentation |
+| **Radare2** | Headless | CLI analysis |
+| **Kernel Drivers / DMA** | Headless | Anti-cheat bypass (EAC/BE) |
 
 ### What else can it do?
 * **Auto-Dump C++ Code:** It can automatically read a game (like Fortnite or a Unity game) and write an entire C++ cheat SDK template for you.
 * **Network Sniffing:** Tell the AI to intercept packets going to the game server.
-* **Math Decryption:** If a game encrypts a memory address, the AI can automatically figure out the math formula to decrypt it for you. 
+* **Math Decryption:** If a game encrypts a memory address, the AI can automatically figure out the math formula to decrypt it for you.
+* **Vulnerability Scanning:** Run AI-powered vuln scans against decompiled functions.
+* **Function Similarity Search:** Find functions that look like known crypto, networking, or anti-cheat patterns.
+* **YARA Rule Generation:** Auto-generate YARA rules from any function for signature scanning.
+* **Cross-Tool Symbol Sync:** Rename a function in IDA and push it to Ghidra (or vice versa) in one command.
+
+---
 
 ## 🛠 Setting up the Backend Plugins
 
-To let NexusRE talk to your specific tools, you need to run a small background plugin in them. 
-
 ### The Automatic Way (Windows)
-Double-click **`inject_plugins.bat`**. It will automatically find where your tools are installed and inject the plugins for you without you lifting a finger!
+Double-click **`inject_mcp_configs.bat`**. The setup wizard handles everything — finding your tools, copying plugins, and fixing Python bindings.
 
 ### The Manual Way (Mac/Linux or Custom Installs)
 If you need to install them manually, here is how to set up each one from the `plugins/` folder:
 
 ### 🦇 IDA Pro
-1. Find the `ida_backend_plugin.py` file in the `plugins/ida/` folder.
-2. Copy it into your IDA Plugins directory (usually `%APPDATA%\Hex-Rays\IDA Pro\plugins\` or the `plugins` folder inside your IDA install directory).
-3. Restart IDA. The server will start automatically in the background.
+1. Copy `plugins/ida/ida_backend_plugin.py` into your IDA Plugins directory:
+   - `%APPDATA%\Hex-Rays\IDA Pro\plugins\`  
+   - Or the `plugins` folder inside your IDA install directory
+2. Restart IDA. The server starts automatically on port `10101`.
+
+> **⚠️ IDA Pro Python Fix:** If IDA complains about Python, run `idapyswitch.exe` from your IDA install folder. This binds IDA to your system's Python. Our setup wizard does this automatically on Windows.
 
 ### 🐉 Ghidra
 1. Open Ghidra and navigate to your project.
 2. Open the **Script Manager** (`Window -> Script Manager`).
-3. Click the "Manage Script Directories" icon and add the `plugins/ghidra/` path, or simply create a new Python script and paste the contents of `ghidra_backend_plugin.py`.
-4. Run the script. Watch the console for *"Starting background HTTP server"*. *(Note: Requires PyGhidra).*
+3. Click the "Manage Script Directories" icon and add the `plugins/ghidra/` path, or copy `ghidra_backend_plugin.py` to your `~/ghidra_scripts/` folder.
+4. Run the script. Watch the console for *"Starting background HTTP server"*.
+
+> **⚠️ Ghidra Requires Java:** You **must** have **JDK 17 or JDK 21** installed and in your system PATH. Ghidra will not start without it. Download from [Adoptium](https://adoptium.net/).
 
 ### 🐞 x64dbg
 1. Install [x64dbgpy](https://github.com/x64dbg/x64dbgpy) to enable Python support.
@@ -108,14 +135,47 @@ If you need to install them manually, here is how to set up each one from the `p
 
 ### 🥷 Binary Ninja
 1. Open your Binary Ninja plugins folder by clicking `Edit -> Open Plugin Folder...`
-2. Copy the `plugins/binja/binja_backend_plugin.py` script into the plugins directory.
+2. Copy `plugins/binja/binja_backend_plugin.py` into the plugins directory.
 3. Restart Binja. The server will automatically initialize in the background.
 
 ### 💉 Cheat Engine
-1. Open Cheat Engine and attach to your target process.
-2. Press `Ctrl+Alt+L` to open the Lua Engine.
-3. Open or paste the contents of `plugins/ce/ce_backend_plugin.lua`.
-4. Click **Execute** to start the internal CE HTTP server.
+1. Copy `plugins/ce/ce_backend_plugin.lua` into your Cheat Engine `autorun` folder (e.g. `C:\Program Files\Cheat Engine 7.5\autorun\`).
+2. Restart Cheat Engine. The plugin starts automatically — **no Python needed!**
+
+> **💡 Tip:** If you can't get IDA or Ghidra working, Cheat Engine is a great alternative that works out of the box with zero dependencies.
+
+---
+
+## 🔧 Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| **IDA says "Python not found"** | Run `idapyswitch.exe` from your IDA install folder, or re-run `inject_mcp_configs.bat` which does it automatically. |
+| **Ghidra won't start** | Install **JDK 17 or 21** and add it to your PATH. |
+| **MCP server disconnects** | Make sure `uv` is installed. Re-run `inject_mcp_configs.bat` to re-sync dependencies. |
+| **"Server not found" in Claude/Cursor** | Restart your IDE after running the installer. The config is injected but the IDE needs a restart to pick it up. |
+| **Backend not detected** | Make sure your RE tool (IDA/Ghidra/CE) is actually running. The setup wizard probes for active backends on ports 10101-10105. |
+
+---
+
+## 📖 Quickstart (After Installation)
+
+Once installed, open your AI coding assistant and try these commands:
+
+```
+"Detect my backends"              → Auto-find running tools
+"Run full_analysis"               → Decompile 200 functions + vuln scan
+"Suggest names for the function at 0x140001234"
+"Generate a YARA rule for this function"
+"Find functions similar to this decryption"
+"Export all symbols as an IDA script"
+"Sync symbols from IDA to Ghidra"
+"Generate a Frida hook for this function"
+```
+
+> 💡 **Pro tip:** Every rename you do teaches the AI. The more you use it, the smarter it gets.
+
+---
 
 <div align="center">
 <i>Built to make game hacking human-readable.</i>
