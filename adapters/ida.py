@@ -187,6 +187,48 @@ class IDAAdapter(BaseAdapter):
         res = await self._call("save_binary", {"output_path": output_path})
         return res.get("success", False)
 
+    # ── Extended Navigation & Structures ───────────────────────────────────
+
+    async def get_callees(self, address: str) -> List[dict]:
+        res = await self._call("get_callees", {"address": address})
+        return res.get("callees", [])
+
+    async def get_callers(self, address: str) -> List[dict]:
+        res = await self._call("get_callers", {"address": address})
+        return res.get("callers", [])
+
+    async def get_xrefs_to_field(self, struct_name: str, field_name: str) -> List[dict]:
+        res = await self._call("get_xrefs_to_field", {"struct_name": struct_name, "field_name": field_name})
+        return res.get("xrefs", [])
+
+    async def patch_address_assembles(self, address: str, instructions: str) -> bool:
+        res = await self._call("patch_address_assembles", {"address": address, "instructions": instructions})
+        return res.get("success", False)
+
+    async def get_stack_frame_variables(self, address: str) -> List[dict]:
+        res = await self._call("get_stack_frame_variables", {"address": address})
+        return res.get("variables", [])
+
+    async def list_local_types(self) -> List[dict]:
+        res = await self._call("list_local_types")
+        return res.get("types", [])
+
+    async def get_defined_structures(self) -> List[dict]:
+        res = await self._call("get_defined_structures")
+        return res.get("structures", [])
+
+    async def analyze_struct_detailed(self, name: str) -> dict:
+        res = await self._call("analyze_struct_detailed", {"name": name})
+        return res.get("structure", {})
+
+    async def declare_c_type(self, c_declaration: str) -> bool:
+        res = await self._call("declare_c_type", {"c_declaration": c_declaration})
+        return res.get("success", False)
+
+    async def set_global_variable_type(self, variable_name: str, new_type: str) -> bool:
+        res = await self._call("set_global_variable_type", {"variable_name": variable_name, "new_type": new_type})
+        return res.get("success", False)
+
     # ── Dynamic Debugger & Memory ─────────────────────────────────────────
 
     async def set_hardware_breakpoint(self, address: str, context_lines: int = 5) -> str:

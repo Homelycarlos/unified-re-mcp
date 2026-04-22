@@ -449,6 +449,102 @@ async def set_local_variable_type(session_id: str, address: str, variable_name: 
         return handle_error(e)
 
 @mcp.tool()
+async def get_callees(session_id: str, address: str) -> Any:
+    """Get all functions called (callees) by the function at the given address."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "get_callees"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"callees": await adapter.get_callees(address)}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def get_callers(session_id: str, address: str) -> Any:
+    """Get all functions that call the given address (callers)."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "get_callers"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"callers": await adapter.get_callers(address)}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def get_xrefs_to_field(session_id: str, struct_name: str, field_name: str) -> Any:
+    """Get all cross references to a named struct field."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "get_xrefs_to_field"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"xrefs": await adapter.get_xrefs_to_field(struct_name, field_name)}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def patch_address_assembles(session_id: str, address: str, instructions: str) -> Any:
+    """Patch the binary using assembly instructions (separated by ';')."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "patch_address_assembles"): return handle_error(Exception("Active backend adapter does not support this."))
+        success = await adapter.patch_address_assembles(address, instructions)
+        if success:
+            from .diff_engine import diff_engine
+            diff_engine.record(session_id, "patch_asm", address, "<asm>", instructions)
+        return {"success": success}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def declare_c_type(session_id: str, c_declaration: str) -> Any:
+    """Create/update a local type from a C declaration (e.g. typedef struct)."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "declare_c_type"): return handle_error(Exception("Active backend adapter does not support this."))
+        success = await adapter.declare_c_type(c_declaration)
+        return {"success": success}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def set_global_variable_type(session_id: str, variable_name: str, new_type: str) -> Any:
+    """Set the type of a global variable by its name."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "set_global_variable_type"): return handle_error(Exception("Active backend adapter does not support this."))
+        success = await adapter.set_global_variable_type(variable_name, new_type)
+        return {"success": success}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def get_stack_frame_variables(session_id: str, address: str) -> Any:
+    """Retrieve the stack frame variables for a given function."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "get_stack_frame_variables"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"variables": await adapter.get_stack_frame_variables(address)}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def list_local_types(session_id: str) -> Any:
+    """List all Local types in the database."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "list_local_types"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"types": await adapter.list_local_types()}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def get_defined_structures(session_id: str) -> Any:
+    """Return a list of all defined structures."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "get_defined_structures"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"structures": await adapter.get_defined_structures()}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
+async def analyze_struct_detailed(session_id: str, name: str) -> Any:
+    """Detailed analysis of a structure with all fields."""
+    try:
+        adapter = get_adapter(session_id)
+        if not hasattr(adapter, "analyze_struct_detailed"): return handle_error(Exception("Active backend adapter does not support this."))
+        return {"structure": await adapter.analyze_struct_detailed(name)}
+    except Exception as e: return handle_error(e)
+
+@mcp.tool()
 async def define_struct(session_id: str, name: str, fields: list) -> Any:
     """
     Create a C struct in the static analyzer (IDA/Ghidra).

@@ -404,6 +404,190 @@ class IdaOperations:
         return exports[offset:offset+limit]
 
     @staticmethod
+    def get_callees(address):
+        addr = int(address, 16)
+        func = idaapi.get_func(addr)
+        if not func:
+            return []
+        func_end = idc.find_func_end(addr)
+        callees = []
+        current_ea = func.start_ea
+        while current_ea < func_end:
+            insn = idaapi.insn_t()
+            idaapi.decode_insn(insn, current_ea)
+            if insn.itype in [idaapi.NN_call, idaapi.NN_callfi, idaapi.NN_callni]:
+                target = idc.get_operand_value(current_ea, 0)
+                target_type = idc.get_operand_type(current_ea, 0)
+                if target_type in [idaapi.o_mem, idaapi.o_near, idaapi.o_far]:
+                    func_type = "internal" if idaapi.get_func(target) else "external"
+                    func_name = idc.get_name(target)
+                    if func_name:
+                        callees.append({"address": hex(target), "name": func_name, "type": func_type})
+            current_ea = idc.next_head(current_ea, func_end)
+        unique = {tuple(c.items()) for c in callees}
+        return [dict(c) for c in unique]
+
+    @staticmethod
+    def get_callers(address):
+        addr = int(address, 16)
+        callers = {}
+        for caller_address in idautils.CodeRefsTo(addr, 0):
+            func = idaapi.get_func(caller_address)
+            if not func: continue
+            insn = idaapi.insn_t()
+            idaapi.decode_insn(insn, caller_address)
+            if insn.itype in [idaapi.NN_call, idaapi.NN_callfi, idaapi.NN_callni]:
+                func_name = idc.get_func_name(func.start_ea)
+                callers[hex(func.start_ea)] = {"address": hex(func.start_ea), "name": func_name}
+        return list(callers.values())
+
+    @staticmethod
+    def patch_address_assembles(address, instructions):
+        addr = int(address, 16)
+        assembles = instructions.split(";")
+        total_len = 0
+        for assemble in assembles:
+            assemble = assemble.strip()
+            if not assemble: continue
+            check, patched = idautils.Assemble(addr, assemble)
+            if not check:
+                raise Exception("Failed to assemble: " + assemble)
+            idaapi.patch_bytes(addr, patched)
+            addr += len(patched)
+            total_len += 1
+        return True
+
+    @staticmethod
+    def get_xrefs_to_field(struct_name, field_name):
+        import ida_typeinf
+        til = ida_typeinf.get_idati()
+        if not til: return []
+        tif = ida_typeinf.tinfo_t()
+        if not tif.get_named_type(til, struct_name, ida_typeinf.BTF_STRUCT, True, False): return []
+        try:
+            idx = ida_typeinf.get_udm_by_fullname(None, struct_name + "." + field_name)
+        except Exception:
+            # Fallback for IDA older versions
+            return []
+        if idx == -1: return []
+        tid = tif.get_udm_tid(idx)
+        if tid == idaapi.BADADDR: return []
+        xrefs = []
+        for ref in idautils.XrefsTo(tid):
+            xrefs.append({"address": hex(ref.frm), "type": "code" if ref.iscode else "data"})
+        return xrefs
+
+    @staticmethod
+    def declare_c_type(c_declaration):
+        import ida_typeinf
+        import sys
+        if sys.platform == "win32":
+            import ctypes
+            c_decls = c_declaration.encode("utf-8")
+            ida_dll = ctypes.CDLL("ida")
+            ida_dll.parse_decls.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_int]
+            ida_dll.parse_decls.restype = ctypes.c_int
+            @ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p)
+            def magic_printer(fmt, arg1): pass
+            flags = ida_typeinf.PT_SIL | ida_typeinf.PT_EMPTY | ida_typeinf.PT_TYP
+            errors = ida_dll.parse_decls(None, c_decls, magic_printer, flags)
+            if errors > 0: raise Exception("Parse decls failed with code " + str(errors))
+            return True
+        else:
+            flags = ida_typeinf.PT_SIL | ida_typeinf.PT_EMPTY | ida_typeinf.PT_TYP
+            errors = ida_typeinf.parse_decls(None, c_declaration, False, flags)
+            if errors > 0: raise Exception("Parse decls failed with code " + str(errors))
+            return True
+
+    @staticmethod
+    def get_stack_frame_variables(address):
+        addr = int(address, 16)
+        import ida_typeinf
+        import ida_ida
+        if ida_ida.inf_get_version() < 9: return []
+        func = idaapi.get_func(addr)
+        if not func: return []
+        tif = ida_typeinf.tinfo_t()
+        if not tif.get_type_by_tid(func.frame) or not tif.is_udt(): return []
+        members = []
+        udt = ida_typeinf.udt_type_data_t()
+        tif.get_udt_details(udt)
+        for udm in udt:
+            if not udm.is_gap():
+                members.append({
+                    "name": udm.name,
+                    "offset": hex((udm.offset // 8) if hasattr(udm, 'offset') else 0),
+                    "size": hex((udm.size // 8) if hasattr(udm, 'size') else 0),
+                    "type": str((udm.type) if hasattr(udm, 'type') else "")
+                })
+        return members
+
+    @staticmethod
+    def list_local_types():
+        import ida_typeinf
+        locals_list = []
+        idati = ida_typeinf.get_idati()
+        type_count = ida_typeinf.get_ordinal_limit(idati)
+        for ordinal in range(1, type_count):
+            try:
+                tif = ida_typeinf.tinfo_t()
+                if tif.get_numbered_type(idati, ordinal):
+                    type_name = tif.get_type_name() or ("<Anonymous #" + str(ordinal) + ">")
+                    type_str = type_name
+                    locals_list.append({"ordinal": ordinal, "name": type_name, "declaration": type_str})
+            except: continue
+        return locals_list
+
+    @staticmethod
+    def get_defined_structures():
+        import ida_typeinf
+        rv = []
+        limit = ida_typeinf.get_ordinal_limit()
+        idati = ida_typeinf.get_idati()
+        for ordinal in range(1, limit):
+            tif = ida_typeinf.tinfo_t()
+            if tif.get_numbered_type(idati, ordinal) and tif.is_udt():
+                udt = ida_typeinf.udt_type_data_t()
+                members = []
+                if tif.get_udt_details(udt):
+                    members = [
+                        {"name": x.name, "offset": hex((x.offset // 8) if hasattr(x, 'offset') else 0), "size": hex((x.size // 8) if hasattr(x, 'size') else 0), "type": str((x.type) if hasattr(x, 'type') else "")}
+                        for x in udt
+                    ]
+                rv.append({"name": tif.get_type_name(), "size": hex(tif.get_size()), "members": members})
+        return rv
+
+    @staticmethod
+    def analyze_struct_detailed(name):
+        import ida_typeinf
+        tif = ida_typeinf.tinfo_t()
+        if not tif.get_named_type(None, name): raise Exception("Structure " + name + " not found")
+        if not tif.is_udt(): raise Exception("Not a UDT")
+        udt_data = ida_typeinf.udt_type_data_t()
+        if not tif.get_udt_details(udt_data): raise Exception("Failed to get details")
+        members = []
+        for i, m in enumerate(udt_data):
+            size = m.size // 8 if m.size > 0 else m.type.get_size()
+            members.append({
+                "index": i, "offset": hex(m.begin() // 8) if hasattr(m, 'begin') else 0, "size": size,
+                "type": m.type._print(), "name": m.name, "is_nested_udt": m.type.is_udt()
+            })
+        return {
+            "name": name, "type": str(tif._print()), "size": tif.get_size(),
+            "is_union": udt_data.is_union, "member_count": udt_data.size(), "members": members
+        }
+
+    @staticmethod
+    def set_global_variable_type(variable_name, new_type):
+        import ida_typeinf
+        ea = idaapi.get_name_ea(idaapi.BADADDR, variable_name)
+        if ea == idaapi.BADADDR: raise Exception("Variable not found")
+        tif = ida_typeinf.tinfo_t()
+        if not ida_typeinf.parse_decl(tif, None, new_type + ";", 0): raise Exception("Failed to parse type")
+        if not ida_typeinf.apply_tinfo(ea, tif, ida_typeinf.PT_SIL): raise Exception("Failed to apply type")
+        return True
+
+    @staticmethod
     def execute_script(script_code):
         """Execute arbitrary IDAPython code and capture stdout + return value."""
         import io
@@ -518,6 +702,30 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             elif action == "memory_regions":
                 result = IdaOperations._execute_sync(IdaOperations.memory_regions)
 
+            # ── Extended Types & Structures ─────────────────────────
+            elif action == "get_stack_frame_variables":
+                result = {"variables": IdaOperations._execute_sync(IdaOperations.get_stack_frame_variables, args.get("address"))}
+            elif action == "list_local_types":
+                result = {"types": IdaOperations._execute_sync(IdaOperations.list_local_types)}
+            elif action == "get_defined_structures":
+                result = {"structures": IdaOperations._execute_sync(IdaOperations.get_defined_structures)}
+            elif action == "analyze_struct_detailed":
+                result = {"structure": IdaOperations._execute_sync(IdaOperations.analyze_struct_detailed, args.get("name"))}
+            elif action == "declare_c_type":
+                result = {"success": IdaOperations._execute_sync_write(IdaOperations.declare_c_type, args.get("c_declaration"))}
+            elif action == "set_global_variable_type":
+                result = {"success": IdaOperations._execute_sync_write(IdaOperations.set_global_variable_type, args.get("variable_name"), args.get("new_type"))}
+
+            # ── Extended Navigation ─────────────────────────────────
+            elif action == "get_callees":
+                result = {"callees": IdaOperations._execute_sync(IdaOperations.get_callees, args.get("address"))}
+            elif action == "get_callers":
+                result = {"callers": IdaOperations._execute_sync(IdaOperations.get_callers, args.get("address"))}
+            elif action == "get_xrefs_to_field":
+                result = {"xrefs": IdaOperations._execute_sync(IdaOperations.get_xrefs_to_field, args.get("struct_name"), args.get("field_name"))}
+            elif action == "patch_address_assembles":
+                result = {"success": IdaOperations._execute_sync_write(IdaOperations.patch_address_assembles, args.get("address"), args.get("instructions"))}
+
             # ── Script Execution ────────────────────────────────────
             elif action == "execute_script":
                 result = IdaOperations._execute_sync(IdaOperations.execute_script, args.get("code", ""))
@@ -531,7 +739,6 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             # Log the request
             import time as _time
             print("[IDA-MCP] %s -> %s" % (action, "ok" if result and "error" not in str(result)[:50] else "err"))
-                return
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
