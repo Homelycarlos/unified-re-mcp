@@ -45,7 +45,7 @@ uv python install 3.12 --quiet
 :: 5. Run the new universal installer engine
 echo.
 echo [*] Launching the auto-installer engine...
-uv run main.py --install
+uv run main.py setup
 
 echo.
 pause
