@@ -237,6 +237,35 @@ if !errorlevel! EQU 0 (
     echo     [!] Failed to copy. Try running as Administrator.
 )
 
+REM ── Create File-IPC directory for zero-dependency fallback ──
+set "CE_ROOT=!CE_FOUND:\autorun=!"
+set "IPC_DIR=!CE_ROOT!\nexusre_ipc"
+if not exist "!IPC_DIR!" (
+    mkdir "!IPC_DIR!" 2>nul
+    echo     [OK] Created file-IPC directory: !IPC_DIR!
+)
+
+REM ── Check for luasocket and attempt auto-install ──
+echo     [*] Checking for luasocket (socket/core.dll)...
+set "CLIBS_DIR=!CE_ROOT!\clibs64"
+set "SOCKET_DLL=!CLIBS_DIR!\socket\core.dll"
+
+if exist "!SOCKET_DLL!" (
+    echo     [OK] luasocket already installed at !CLIBS_DIR!
+) else (
+    REM Check alternative locations
+    if exist "!CE_ROOT!\socket\core.dll" (
+        echo     [OK] luasocket found at !CE_ROOT!\socket\
+    ) else (
+        echo     [!] luasocket NOT found. The plugin will use file-based IPC instead.
+        echo     [i] For best performance, install luasocket manually:
+        echo         1. Download socket/core.dll for Lua 5.3 ^(64-bit^)
+        echo         2. Place it in: !CLIBS_DIR!\socket\core.dll
+        echo         3. Restart Cheat Engine
+        echo     [i] The plugin still works without luasocket using file IPC.
+    )
+)
+
 :ce_done
 
 REM ── Summary ─────────────────────────────────────────────────────────────

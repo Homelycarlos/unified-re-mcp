@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import os
+import time
 import aiohttp
+from pathlib import Path
 from typing import List, Optional, Any
 from .base import BaseAdapter
 from schemas.models import (
@@ -11,10 +14,23 @@ from schemas.models import (
 
 logger = logging.getLogger("NexusRE")
 
+# ── File-based IPC fallback paths ────────────────────────────────────────────
+# These match the paths created by ce_backend_plugin.lua when luasocket is missing.
+_CE_IPC_SEARCH_PATHS = [
+    Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Cheat Engine 7.5" / "nexusre_ipc",
+    Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Cheat Engine 7.4" / "nexusre_ipc",
+    Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Cheat Engine 7.5" / "nexusre_ipc",
+    Path(r"C:\Cheat Engine") / "nexusre_ipc",
+]
+
+
 class CheatEngineAdapter(BaseAdapter):
     """
-    Adapter bridging MCP to Cheat Engine via Lua scripting over socket and HTTP RPC.
-    Contains both raw TCP socket methods and async Lua HTTP execution.
+    Adapter bridging MCP to Cheat Engine via Lua scripting.
+    Supports three transport modes (auto-detected in order):
+      1. TCP socket (via luasocket in CE)
+      2. HTTP RPC
+      3. File-based IPC (zero-dependency fallback)
     """
     def __init__(self, backend_url: str = "127.0.0.1:10105"):
         if backend_url == "":
@@ -29,11 +45,63 @@ class CheatEngineAdapter(BaseAdapter):
             self.host = parts[0]
             self.port = int(parts[1]) if len(parts) > 1 else 10105
             self.base_url = f"http://{self.host}:{self.port}"
+
+        # Detect file IPC directory (set by CE plugin when luasocket is missing)
+        self._ipc_dir: Optional[Path] = None
+        self._detect_ipc_dir()
             
-        logger.info(f"Initialized CheatEngineAdapter connecting to {self.host}:{self.port}")
+        logger.info(f"Initialized CheatEngineAdapter connecting to {self.host}:{self.port} (file_ipc={'yes' if self._ipc_dir else 'no'})")
+
+    def _detect_ipc_dir(self):
+        """Scan known CE install paths for the nexusre_ipc directory."""
+        for p in _CE_IPC_SEARCH_PATHS:
+            mode_file = p / "mode.txt"
+            if mode_file.exists():
+                self._ipc_dir = p
+                logger.info(f"Detected CE file-IPC at: {p}")
+                return
+        # Also check if the user passed a custom IPC path via env var
+        custom = os.environ.get("NEXUSRE_CE_IPC_DIR")
+        if custom and Path(custom).exists():
+            self._ipc_dir = Path(custom)
+
+    async def _send_file_ipc(self, payload: str, timeout: float = 5.0) -> str:
+        """Send a command via file-based IPC (for CE installs without luasocket)."""
+        if not self._ipc_dir:
+            return "ERROR|FILE_IPC_NOT_AVAILABLE"
+        
+        request_file = self._ipc_dir / "request.txt"
+        response_file = self._ipc_dir / "response.txt"
+        lock_file = self._ipc_dir / "lock"
+
+        try:
+            # Wait for any previous lock to clear
+            start = time.monotonic()
+            while lock_file.exists() and (time.monotonic() - start) < timeout:
+                await asyncio.sleep(0.02)
+
+            # Write request
+            request_file.write_text(payload, encoding="utf-8")
+
+            # Wait for response
+            start = time.monotonic()
+            while (time.monotonic() - start) < timeout:
+                if response_file.exists() and not lock_file.exists():
+                    resp = response_file.read_text(encoding="utf-8").strip()
+                    try:
+                        response_file.unlink()
+                    except OSError:
+                        pass
+                    return resp
+                await asyncio.sleep(0.02)
+
+            return "ERROR|TIMEOUT"
+        except Exception as e:
+            logger.error(f"File IPC error: {e}")
+            return "ERROR|FILE_IPC_FAILED"
 
     async def _send_raw(self, payload: str) -> str:
-        """Send raw TCP payload to CE socket."""
+        """Send raw TCP payload to CE socket. Falls back to file IPC if TCP fails."""
         try:
             reader, writer = await asyncio.open_connection(self.host, self.port)
             writer.write((payload + "\n").encode())
@@ -43,7 +111,11 @@ class CheatEngineAdapter(BaseAdapter):
             await writer.wait_closed()
             return data.decode().strip()
         except Exception as e:
-            logger.error(f"Cheat Engine connection error: {e}")
+            logger.warning(f"CE TCP connection failed ({e}), trying file IPC fallback...")
+            # Fallback to file-based IPC
+            if self._ipc_dir:
+                return await self._send_file_ipc(payload)
+            logger.error(f"Cheat Engine connection error: {e} (no file IPC available)")
             return "ERROR|CONNECTION_FAILED"
 
     async def execute_lua(self, script: str) -> dict:
