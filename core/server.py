@@ -3099,6 +3099,58 @@ def server_status() -> str:
         return handle_error(e)
 
 
+# @mcp.tool() # Removed for Limit Bypass
+async def smart_search(session_id: str, query: str) -> Any:
+    """
+    Intelligently search a binary for logic related to a query.
+    It first searches function names. If no/few matches are found (like in stripped binaries),
+    it automatically searches for strings matching the query and resolves their cross-references
+    to find the underlying functions.
+    """
+    try:
+        results = []
+        
+        # 1. Search Function Names
+        funcs = await list_functions(session_id, offset=0, limit=20, filter_str=query)
+        if isinstance(funcs, list) and len(funcs) > 0:
+            for f in funcs:
+                f["match_type"] = "function_name"
+                results.append(f)
+                
+        # 2. Search Strings
+        strings = await get_strings(session_id, offset=0, limit=20, filter_str=query)
+        if isinstance(strings, list) and len(strings) > 0:
+            for s in strings:
+                str_addr = s.get("address")
+                str_val = s.get("value") or s.get("string", "")
+                if str_addr:
+                    # Get xrefs to this string
+                    xrefs = await get_xrefs(session_id, str_addr)
+                    if isinstance(xrefs, list):
+                        for xref in xrefs:
+                            # xrefs to strings have 'frm' (the instruction address)
+                            xref_frm = xref.get("frm")
+                            if xref_frm:
+                                # Get the function containing this instruction
+                                func = await get_function(session_id, xref_frm)
+                                if isinstance(func, dict) and "error_message" not in func:
+                                    func["match_type"] = "string_xref"
+                                    func["matched_string"] = str_val
+                                    func["string_address"] = str_addr
+                                    results.append(func)
+                                    
+        # Deduplicate by function address
+        unique_results = {}
+        for r in results:
+            addr = r.get("address")
+            if addr and addr not in unique_results:
+                unique_results[addr] = r
+                
+        return {"query": query, "total_matches": len(unique_results), "matches": list(unique_results.values())}
+    except Exception as e:
+        return handle_error(e)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONSOLIDATED ROUTER TOOLS (Limit Bypass)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3230,8 +3282,8 @@ async def game_dumping_tools(
 
 @mcp.tool()
 async def ai_intelligence_tools(
-    action: Literal["auto_annotate", "suggest_names", "vuln_scan", "index_functions_for_similarity", "find_similar_functions", "full_analysis", "quick_scan", "cross_analyze"],
-    session_id: str = None, limit: int = 200, min_confidence: float = 0.4, address: str = None, top_k: int = 5, threshold: float = 0.5, static_session: str = None, dynamic_session: str = None
+    action: Literal["auto_annotate", "suggest_names", "vuln_scan", "index_functions_for_similarity", "find_similar_functions", "full_analysis", "quick_scan", "cross_analyze", "smart_search"],
+    session_id: str = None, limit: int = 200, min_confidence: float = 0.4, address: str = None, top_k: int = 5, threshold: float = 0.5, static_session: str = None, dynamic_session: str = None, query: str = None
 ) -> Any:
     """Consolidated router for running AI-driven automated reverse engineering."""
     if action == "auto_annotate": return await auto_annotate(session_id, limit, min_confidence)
@@ -3242,6 +3294,7 @@ async def ai_intelligence_tools(
     elif action == "full_analysis": return await full_analysis(session_id, limit)
     elif action == "quick_scan": return await quick_scan(session_id)
     elif action == "cross_analyze": return await cross_analyze(static_session, dynamic_session, address)
+    elif action == "smart_search": return await smart_search(session_id, query)
 
 @mcp.tool()
 async def binary_analysis_sandbox(
