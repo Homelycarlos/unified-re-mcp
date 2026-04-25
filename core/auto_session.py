@@ -75,7 +75,7 @@ def auto_create_sessions(session_manager, host: str = "127.0.0.1") -> list[dict]
                 session_id=session_id,
                 backend=backend,
                 binary_path="auto-detected",
-                arch=backend_info["arch"]
+                architecture=backend_info["arch"]
             )
             created.append({
                 "session_id": session_id,
